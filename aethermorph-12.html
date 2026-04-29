@@ -1,0 +1,3654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0a14" />
+<title>AETHERMORPH · AI Frame Loop · v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=JetBrains+Mono:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+
+<style>
+  :root {
+    --bg-0: #07070d;
+    --bg-1: #0e0e1a;
+    --ink: #ece9f5;
+    --ink-dim: #8a87a3;
+    --ink-mid: #b8b5cc;
+    --acid: #d4ff3a;
+    --plasma: #ff4dd2;
+    --cyan: #4de8ff;
+    --line: rgba(255,255,255,0.08);
+    --line-strong: rgba(255,255,255,0.14);
+    --glass: rgba(255,255,255,0.04);
+    --glass-strong: rgba(255,255,255,0.07);
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 14px;
+    overscroll-behavior: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(60% 40% at 15% 0%, rgba(255,77,210,0.12), transparent 60%),
+      radial-gradient(50% 50% at 90% 20%, rgba(77,232,255,0.10), transparent 60%),
+      radial-gradient(40% 30% at 50% 100%, rgba(212,255,58,0.08), transparent 60%),
+      var(--bg-0);
+    z-index: -2;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+    opacity: 0.5;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    z-index: -1;
+  }
+
+  .app {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 18px 14px 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 8px 4px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 26px;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .brand .accent { color: var(--acid); }
+  .sub {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    margin-top: 4px;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ink-dim);
+    box-shadow: 0 0 0 0 currentColor;
+    transition: background .2s;
+  }
+  .status-dot.idle { background: #555; }
+  .status-dot.gen { background: var(--acid); animation: pulse 1.2s infinite; }
+  .status-dot.err { background: var(--plasma); }
+  .status-dot.done { background: var(--cyan); }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(212,255,58,0.6); }
+    50% { box-shadow: 0 0 0 8px rgba(212,255,58,0); }
+  }
+  .status-line {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+  }
+
+  .panel {
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%);
+    pointer-events: none;
+  }
+
+  .stage {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    border-radius: var(--radius);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1a1a2a 0%, #0d0d18 100%);
+    border: 1px solid var(--line);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.02) inset,
+      0 30px 60px -20px rgba(0,0,0,0.6);
+  }
+  #canvas, #playCanvas {
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: auto;
+  }
+  #playCanvas { display: none; position: absolute; inset: 0; }
+  .stage.playing #canvas { display: none; }
+  .stage.playing #playCanvas { display: block; }
+
+  .stage-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    padding: 12px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  .stage-overlay .row {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .stage-overlay .corner-l { display: flex; gap: 6px; align-items: center; }
+  .stage-overlay .rec {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--plasma);
+    opacity: 0;
+  }
+  .stage-overlay.recording .rec { opacity: 1; animation: pulse-rec 0.8s infinite; }
+  @keyframes pulse-rec { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .stage-empty {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    color: var(--ink-dim);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 24px;
+  }
+  .stage-empty .ascii {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 36px;
+    color: var(--acid);
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .stage-empty.hidden { display: none; }
+
+  .play-controls {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.6));
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    pointer-events: none;
+  }
+  .stage.has-frames .play-controls { transform: translateY(0); pointer-events: auto; }
+  .play-btn {
+    background: var(--acid);
+    color: #0a0a14;
+    border: none;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .play-btn:active { transform: scale(0.92); }
+  .play-fps {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 11px;
+    color: var(--acid);
+    min-width: 56px;
+    text-align: right;
+  }
+  .play-fps-slider { flex: 1; height: 18px; }
+
+  .prompt-wrap { display: flex; flex-direction: column; gap: 10px; }
+
+  .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: var(--ink-dim);
+  }
+  .label .num { color: var(--acid); margin-right: 6px; }
+
+  textarea {
+    width: 100%;
+    min-height: 70px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-style: italic;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+    line-height: 1.4;
+  }
+  textarea:focus { border-color: var(--acid); }
+
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .chip {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-mid);
+    padding: 7px 11px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chip:active { transform: scale(0.96); }
+  .chip:hover { border-color: var(--line-strong); color: var(--ink); }
+  .chip .glyph {
+    font-family: 'Major Mono Display', monospace;
+    color: var(--acid);
+    font-size: 12px;
+  }
+  .chip.plasma .glyph { color: var(--plasma); }
+  .chip.cyan .glyph { color: var(--cyan); }
+
+  .init-img-row {
+    display: flex; gap: 10px; align-items: center;
+    margin-top: 4px;
+  }
+  .init-thumb {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    border: 1px dashed var(--line-strong);
+    background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-dim);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    overflow: hidden;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .init-thumb.has-img { border-style: solid; border-color: var(--cyan); }
+  .init-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .init-info {
+    flex: 1;
+    display: flex; flex-direction: column; gap: 6px;
+    min-width: 0;
+  }
+  .init-status {
+    font-size: 10px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+  .init-status.active { color: var(--cyan); }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .ctrl {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .ctrl-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .ctrl-name {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+  }
+  .ctrl-val {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 14px;
+    color: var(--acid);
+    letter-spacing: 0.05em;
+  }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px;
+    background: transparent; outline: none; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: linear-gradient(90deg, var(--acid) var(--fill,50%), rgba(255,255,255,0.1) var(--fill,50%));
+    border-radius: 2px;
+  }
+  input[type=range]::-moz-range-track {
+    height: 2px; background: rgba(255,255,255,0.1); border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px;
+    background: var(--ink);
+    border: 2px solid var(--acid);
+    border-radius: 50%;
+    margin-top: -7px;
+    cursor: pointer;
+    box-shadow: 0 0 0 4px rgba(212,255,58,0.15);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border: 2px solid var(--acid);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 8px;
+  }
+  button.primary, button.ghost {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 14px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  button.primary {
+    background: var(--acid);
+    color: #0a0a14;
+    border-color: var(--acid);
+    font-weight: 500;
+    box-shadow: 0 0 24px rgba(212,255,58,0.25);
+  }
+  button.primary:active { transform: scale(0.98); }
+  button.primary:disabled {
+    background: rgba(255,255,255,0.06);
+    color: var(--ink-dim);
+    border-color: var(--line);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+  }
+  button.ghost:active { transform: scale(0.98); }
+  button.ghost.danger { color: var(--plasma); border-color: rgba(255,77,210,0.3); }
+  button.ghost.cyan { color: var(--cyan); border-color: rgba(77,232,255,0.3); }
+  button.ghost:disabled { color: var(--ink-dim); cursor: not-allowed; opacity: 0.5; }
+
+  .progress {
+    height: 3px;
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--plasma), var(--acid));
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .progress-text {
+    margin-top: 6px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .filmstrip-panel { padding: 12px 0; }
+  .filmstrip-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0 14px 10px;
+  }
+  .filmstrip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 14px 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--acid) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filmstrip::-webkit-scrollbar { height: 4px; }
+  .filmstrip::-webkit-scrollbar-track { background: transparent; }
+  .filmstrip::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+  .frame {
+    flex: 0 0 auto;
+    width: 64px; height: 64px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.3);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .frame:active { transform: scale(0.94); }
+  .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .frame::after {
+    content: attr(data-i);
+    position: absolute;
+    bottom: 2px; left: 4px;
+    font-size: 8px;
+    color: var(--acid);
+    font-family: 'Major Mono Display', monospace;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.9);
+  }
+  .filmstrip-empty {
+    padding: 14px;
+    color: var(--ink-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    text-align: center;
+  }
+
+  .export-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .export-grid button {
+    font-size: 10px;
+    padding: 12px 4px;
+    letter-spacing: 0.15em;
+  }
+  .export-grid button .ico {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 4px;
+    color: var(--cyan);
+    font-family: 'Major Mono Display', monospace;
+  }
+  .export-grid button.mp4 .ico { color: var(--plasma); }
+  .export-grid button.gif .ico { color: var(--acid); }
+
+  footer {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 14px 0;
+  }
+  footer .dot { color: var(--acid); margin: 0 6px; }
+
+  .toast {
+    position: fixed;
+    left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(140px);
+    background: rgba(20,20,30,0.95);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+    color: var(--ink);
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-width: calc(100vw - 32px);
+    text-align: center;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: var(--plasma); color: var(--plasma); }
+  .toast.success { border-color: var(--acid); color: var(--acid); }
+
+  .section-title {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 4px 4px 6px;
+  }
+  .section-title h2 {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    margin: 0;
+    font-weight: normal;
+    color: var(--ink);
+  }
+  .section-title .meta {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.2s;
+  }
+  .modal-bg.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .modal {
+    background: linear-gradient(180deg, #131320 0%, #0c0c16 100%);
+    border-top: 1px solid var(--line-strong);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
+  }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--line-strong);
+    border-radius: 2px;
+    margin: 10px auto 0;
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px 10px;
+  }
+  .modal-head h3 {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 14px;
+    letter-spacing: 0.3em;
+    margin: 0;
+    font-weight: normal;
+  }
+  .modal-close {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 18px 24px;
+  }
+
+  .lib-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s;
+  }
+  .lib-item:hover { border-color: var(--line-strong); }
+  .lib-item .name {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 12px;
+    color: var(--acid);
+    letter-spacing: 0.1em;
+  }
+  .lib-item .body {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-mid);
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .lib-item .params {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .lib-item .param-pill {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    padding: 3px 8px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 999px;
+    color: var(--ink-dim);
+  }
+  .lib-item .param-pill .v { color: var(--cyan); margin-left: 4px; }
+  .lib-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--ink-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+  }
+  .lib-empty .ascii {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 32px;
+    color: var(--line-strong);
+    margin-bottom: 14px;
+    letter-spacing: 0;
+  }
+
+  .save-form {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .save-form input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 11px 12px;
+    outline: none;
+  }
+  .save-form input:focus { border-color: var(--acid); }
+  .save-form .preview-text {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-mid);
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 12px;
+    line-height: 1.4;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+
+  .frame-inspect {
+    width: 100%;
+    aspect-ratio: 1/1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    margin-bottom: 14px;
+  }
+  .frame-inspect img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .frame-inspect-meta {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--acid);
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .frame-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* Auth banner */
+  .auth-banner {
+    background: linear-gradient(135deg, rgba(255,77,210,0.18), rgba(212,255,58,0.14));
+    border: 1px solid var(--plasma);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .auth-banner.show { display: flex; }
+  .auth-banner::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.08 0'/></filter><rect width='80' height='80' filter='url(%23n)'/></svg>");
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+  .auth-banner .title {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: var(--ink);
+    position: relative;
+  }
+  .auth-banner .body {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--ink-mid);
+    letter-spacing: 0.04em;
+    position: relative;
+  }
+  .auth-banner button.signin-btn {
+    background: var(--ink);
+    color: #0a0a14;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(255,255,255,0.2);
+    position: relative;
+  }
+  .auth-banner button.signin-btn:active { transform: scale(0.98); }
+  .auth-banner button.signin-btn .arrow {
+    color: var(--plasma);
+    margin-left: 6px;
+  }
+
+  /* Auth chip in header (when signed in) */
+  .auth-chip-mini {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    padding: 4px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  .auth-chip-mini:hover { color: var(--plasma); border-color: var(--plasma); }
+  .auth-chip-mini.signed-in::before {
+    content: "●";
+    color: var(--cyan);
+    margin-right: 5px;
+  }
+
+  /* Collapsible sections */
+  .accordion {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.18);
+  }
+  .accordion-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .accordion-head:hover { background: rgba(255,255,255,0.03); }
+  .accordion-head .left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .accordion-head .icon {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 14px;
+    color: var(--acid);
+    width: 20px;
+    text-align: center;
+  }
+  .accordion-head .name {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--ink);
+    text-transform: lowercase;
+  }
+  .accordion-head .summary {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    text-align: right;
+    line-height: 1.4;
+    max-width: 55%;
+  }
+  .accordion-head .chev {
+    color: var(--ink-dim);
+    transition: transform 0.2s;
+    font-family: 'Major Mono Display', monospace;
+    margin-left: 10px;
+  }
+  .accordion.open .accordion-head .chev { transform: rotate(180deg); }
+  .accordion-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .accordion.open .accordion-body { max-height: 1200px; }
+  .accordion-inner {
+    padding: 4px 14px 14px;
+  }
+
+  /* Mode toggle (warp+blend vs pure ai morph) */
+  .mode-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 0;
+    margin-bottom: 12px;
+  }
+  .mode-toggle button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    padding: 9px 10px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mode-toggle button.active {
+    background: var(--acid);
+    color: #0a0a14;
+    font-weight: 500;
+  }
+  .mode-toggle button:active { transform: scale(0.96); }
+
+  .mode-caption {
+    font-size: 10px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    padding: 0 4px 12px;
+    letter-spacing: 0.04em;
+  }
+  .mode-caption .accent { color: var(--cyan); }
+
+  /* Keyframe timeline */
+  .kf-timeline {
+    position: relative;
+    height: 32px;
+    margin: 14px 0 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    overflow: visible;
+  }
+  .kf-timeline-track {
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    background: linear-gradient(90deg,
+      rgba(212,255,58,0.4),
+      rgba(77,232,255,0.4),
+      rgba(255,77,210,0.4));
+    transform: translateY(-50%);
+    border-radius: 1px;
+  }
+  .kf-marker {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--acid);
+    cursor: pointer;
+    z-index: 2;
+    transition: transform 0.15s;
+  }
+  .kf-marker:nth-child(2n) { border-color: var(--cyan); }
+  .kf-marker:nth-child(3n) { border-color: var(--plasma); }
+  .kf-marker:hover { transform: translate(-50%, -50%) scale(1.25); }
+  .kf-marker .label {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Major Mono Display', monospace;
+    font-size: 9px;
+    color: var(--ink);
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Keyframe list items */
+  .kf-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--acid);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kf-item:nth-child(2n) { border-left-color: var(--cyan); }
+  .kf-item:nth-child(3n) { border-left-color: var(--plasma); }
+  .kf-item .kf-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .kf-item .kf-num {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 11px;
+    color: var(--acid);
+    letter-spacing: 0.15em;
+    flex-shrink: 0;
+  }
+  .kf-item .kf-frame-input {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .kf-item .kf-frame-input label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    margin-right: 4px;
+  }
+  .kf-item .kf-frame-input input {
+    width: 42px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--cyan);
+    font-family: 'Major Mono Display', monospace;
+    font-size: 13px;
+    padding: 6px 4px;
+    text-align: center;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .kf-item .kf-frame-input input:focus { border-color: var(--cyan); }
+  .kf-item .kf-step {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    font-family: 'Major Mono Display', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .kf-item .kf-step:active {
+    transform: scale(0.92);
+    background: var(--cyan);
+    color: #0a0a14;
+  }
+  .kf-item .kf-step:hover { border-color: var(--cyan); color: var(--cyan); }
+  .kf-item .kf-delete {
+    background: transparent;
+    border: 1px solid rgba(255,77,210,0.3);
+    color: var(--plasma);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .kf-item .kf-delete:active { transform: scale(0.92); }
+  .kf-item textarea {
+    min-height: 50px;
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  /* Seed control */
+  .seed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .seed-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    flex-shrink: 0;
+  }
+  .seed-input {
+    flex: 1;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--cyan);
+    font-family: 'Major Mono Display', monospace;
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    min-width: 0;
+  }
+  .seed-input:focus { border-color: var(--cyan); }
+  .seed-input.locked { color: var(--acid); border-color: rgba(212,255,58,0.4); }
+  .seed-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-family: 'Major Mono Display', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .seed-btn:active { transform: scale(0.92); }
+  .seed-btn:hover { color: var(--ink); border-color: var(--line-strong); }
+  .seed-btn.active {
+    color: var(--acid);
+    border-color: var(--acid);
+    background: rgba(212,255,58,0.08);
+  }
+
+  /* Cloudflare credentials banner */
+  .cf-banner {
+    background: linear-gradient(135deg, rgba(247, 144, 33, 0.10), rgba(212, 255, 58, 0.06));
+    border: 1px solid rgba(247, 144, 33, 0.4);
+    border-radius: var(--radius);
+    padding: 14px;
+    overflow: hidden;
+    position: relative;
+  }
+  .cf-banner.connected {
+    background: rgba(77, 232, 255, 0.05);
+    border-color: rgba(77, 232, 255, 0.3);
+  }
+  .cf-banner-head {
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+  }
+  .cf-title {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    color: var(--ink);
+  }
+  .cf-banner.connected .cf-title::before {
+    content: "● ";
+    color: var(--cyan);
+  }
+  .cf-toggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .cf-banner.collapsed .cf-toggle { transform: rotate(-90deg); }
+  .cf-body {
+    margin-top: 14px;
+    transition: max-height 0.3s, margin-top 0.3s, opacity 0.3s;
+    overflow: hidden;
+  }
+  .cf-banner.collapsed .cf-body {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+  }
+  .cf-step {
+    font-size: 11px;
+    color: var(--ink-mid);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .cf-step .accent { color: var(--acid); font-weight: 500; }
+  .cf-steps {
+    margin: 6px 0 12px;
+    padding-left: 20px;
+    font-size: 11px;
+    color: var(--ink-mid);
+    line-height: 1.7;
+  }
+  .cf-steps li { margin-bottom: 4px; }
+  .cf-steps a {
+    color: var(--cyan);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .cf-steps b { color: var(--ink); font-weight: 500; }
+  .cf-steps code, .cf-step code {
+    background: rgba(0,0,0,0.4);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    word-break: break-all;
+  }
+  .cf-section-title {
+    font-family: 'Major Mono Display', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--acid);
+    margin-top: 14px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .cf-form {
+    display: flex; flex-direction: column; gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .cf-form label {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .cf-form label span {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+  }
+  .cf-form input {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 9px 10px;
+    outline: none;
+  }
+  .cf-form input:focus { border-color: var(--cyan); }
+
+  /* Frame & FPS preset buttons */
+  .frame-preset, .fps-preset {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    text-transform: lowercase;
+    white-space: nowrap;
+  }
+  .frame-preset:active, .fps-preset:active { transform: scale(0.94); }
+  .frame-preset:hover, .fps-preset:hover {
+    color: var(--ink);
+    border-color: var(--line-strong);
+  }
+  .frame-preset.active, .fps-preset.active {
+    background: var(--acid);
+    color: #0a0a14;
+    border-color: var(--acid);
+    font-weight: 500;
+  }
+  .fps-preset {
+    flex: 0 0 auto;
+    min-width: 60px;
+  }
+
+  /* Aspect ratio selector */
+  .aspect-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .aspect-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    flex-shrink: 0;
+  }
+  .aspect-pills {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aspect-pills::-webkit-scrollbar { display: none; }
+  .aspect-pills button {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+  .aspect-pills button:active { transform: scale(0.94); }
+  .aspect-pills button:hover { color: var(--ink); border-color: var(--line-strong); }
+  .aspect-pills button.active {
+    background: var(--cyan);
+    color: #0a0a14;
+    border-color: var(--cyan);
+    font-weight: 500;
+  }
+
+  /* Reset transforms button */
+  .reset-btn {
+    background: transparent;
+    border: 1px dashed var(--line-strong);
+    color: var(--ink-dim);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    margin-top: 8px;
+    width: 100%;
+  }
+  .reset-btn:hover {
+    color: var(--plasma);
+    border-color: var(--plasma);
+    border-style: solid;
+  }
+  .reset-btn:active { transform: scale(0.98); }
+
+  /* Slider rows inside accordions */
+  .slider-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-row.single { grid-template-columns: 1fr; }
+
+  @media (min-width: 600px) {
+    .app { max-width: 560px; padding: 24px 20px 140px; }
+    .brand { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <div>
+      <div class="brand">aethermorph<span class="accent">.</span></div>
+      <div class="sub">AI · Frame · Loop</div>
+    </div>
+    <div class="status-line">
+      <span id="statusText">idle</span>
+      <span id="statusDot" class="status-dot idle"></span>
+    </div>
+  </header>
+
+  <!-- Auth banner removed — Pollinations needs no auth -->
+
+  <!-- Cloudflare Worker setup banner -->
+  <div class="cf-banner" id="cfBanner">
+    <div class="cf-banner-head">
+      <div class="cf-title">connect your worker</div>
+      <button class="cf-toggle" id="cfBannerToggle">▾</button>
+    </div>
+    <div class="cf-body" id="cfBannerBody">
+      <div class="cf-step">aethermorph generates images via your own free cloudflare worker — <span class="accent">10,000 generations per day, free, no credit card</span>. one-time 5-minute setup.</div>
+
+      <div class="cf-section-title">step 1 · sign up</div>
+      <ol class="cf-steps">
+        <li>create a free <a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">cloudflare account</a> · no credit card needed · verify your email</li>
+      </ol>
+
+      <div class="cf-section-title">step 2 · create the worker</div>
+      <ol class="cf-steps">
+        <li>in the dashboard sidebar, find <b>"compute (workers)"</b> or <b>"workers &amp; pages"</b></li>
+        <li>tap <b>"create"</b> · name it <code>aethermorph</code> · tap <b>"deploy"</b></li>
+        <li>tap <b>"edit code"</b> · delete everything · paste in the worker script (link below)</li>
+        <li>tap <b>"deploy"</b> at the top right</li>
+      </ol>
+
+      <div class="cf-section-title">step 3 · enable ai access</div>
+      <ol class="cf-steps">
+        <li>go back to your worker (← back arrow) → tap <b>"settings"</b> → <b>"bindings"</b></li>
+        <li>tap <b>"add binding"</b> → choose <b>"workers ai"</b></li>
+        <li>variable name must be exactly: <code>AI</code> (uppercase)</li>
+        <li>tap <b>"deploy"</b> to save</li>
+      </ol>
+
+      <div class="cf-section-title">step 4 · copy the worker url</div>
+      <ol class="cf-steps">
+        <li>on the worker overview, copy the url shown near the top</li>
+        <li>looks like: <code>https://aethermorph.YOUR-NAME.workers.dev</code></li>
+        <li>paste it below and tap save → test</li>
+      </ol>
+
+      <div class="cf-step" style="font-size:10px; opacity:0.7; margin-top:6px;">need the worker script? <a href="aethermorph-worker.js" target="_blank" rel="noopener">view it here</a> (107 lines, copy &amp; paste). full guide: <a href="SETUP.md" target="_blank" rel="noopener">SETUP.md</a></div>
+
+      <div class="cf-form">
+        <label>
+          <span>worker url</span>
+          <input type="text" id="cfWorkerUrl" placeholder="https://aethermorph.your-name.workers.dev" autocomplete="off" spellcheck="false" inputmode="url" />
+        </label>
+        <div class="row-actions">
+          <button class="chip plasma" id="cfSave"><span class="glyph">✓</span> save</button>
+          <button class="chip" id="cfTest"><span class="glyph">⚡</span> test</button>
+          <button class="chip" id="cfClear" style="display:none">clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="panel" style="padding:10px;">
+    <div class="stage" id="stage">
+      <canvas id="canvas" width="1024" height="576"></canvas>
+      <canvas id="playCanvas" width="1024" height="576"></canvas>
+      <div class="stage-overlay" id="stageOverlay">
+        <div class="row">
+          <div class="corner-l"><span class="rec"></span><span id="frameLabel">F · 000</span></div>
+          <div id="resLabel">1024×576</div>
+        </div>
+        <div class="row">
+          <div id="modeLabel">— init —</div>
+          <div id="timeLabel">00:00</div>
+        </div>
+      </div>
+      <div class="stage-empty" id="stageEmpty">
+        <div class="ascii">◢◤</div>
+        <div>enter prompt<br/>→ press loop</div>
+      </div>
+      <div class="play-controls" id="playControls">
+        <button class="play-btn" id="playBtn">▶</button>
+        <input type="range" class="play-fps-slider" id="playFps" min="2" max="30" step="1" value="8" />
+        <span class="play-fps" id="playFpsVal">8 fps</span>
+      </div>
+    </div>
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-text">
+      <span id="progressLabel">awaiting input</span>
+      <span id="progressFrac">0 / 0</span>
+    </div>
+
+    <!-- Aspect ratio selector -->
+    <div class="aspect-row">
+      <span class="aspect-label">aspect</span>
+      <div class="aspect-pills" id="aspectPills">
+        <button data-ar="16:9" class="active">16:9</button>
+        <button data-ar="9:16">9:16</button>
+        <button data-ar="1:1">1:1</button>
+        <button data-ar="4:5">4:5</button>
+        <button data-ar="21:9">21:9</button>
+        <button data-ar="3:2">3:2</button>
+        <button data-ar="2:3">2:3</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">
+      <h2>prompt</h2>
+      <div class="meta" id="promptMeta">vision seed</div>
+    </div>
+
+    <!-- Prompt mode toggle -->
+    <div class="mode-toggle">
+      <button class="active" data-pmode="single" id="pmSingle">single prompt</button>
+      <button data-pmode="keyframes" id="pmKeyframes">keyframes</button>
+    </div>
+
+    <!-- SINGLE PROMPT MODE -->
+    <div id="singleMode">
+      <div class="prompt-wrap">
+        <textarea id="prompt" placeholder="describe the world…">a tunnel of bioluminescent jellyfish drifting through a cosmic nebula, ethereal light, cinematic</textarea>
+        <div class="row-actions">
+          <button class="chip" id="openPromptLib"><span class="glyph">▦</span> library</button>
+          <button class="chip plasma" id="savePrompt"><span class="glyph">+</span> save prompt</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KEYFRAMES MODE -->
+    <div id="keyframesMode" style="display:none;">
+      <div class="mode-caption">
+        <span class="accent">keyframes:</span> set prompts at specific frame numbers. between keyframes, the prompt morphs by blending phrases from both. great for narrative arcs (forest → crystal cave → cathedral).
+      </div>
+
+      <!-- Visual timeline -->
+      <div class="kf-timeline" id="kfTimeline">
+        <div class="kf-timeline-track" id="kfTrack"></div>
+        <div class="kf-timeline-labels" id="kfLabels"></div>
+      </div>
+
+      <!-- Keyframe list -->
+      <div id="kfList"></div>
+
+      <div class="row-actions" style="margin-top:10px;">
+        <button class="chip cyan" id="addKeyframe"><span class="glyph">+</span> add keyframe</button>
+        <button class="chip" id="openPromptLib2"><span class="glyph">▦</span> library</button>
+      </div>
+    </div>
+
+    <div class="init-img-row">
+      <label class="init-thumb" id="initThumb" for="initFile">
+        <span id="initThumbText">init</span>
+      </label>
+      <input type="file" id="initFile" accept="image/*" style="display:none" />
+      <div class="init-info">
+        <div class="init-status" id="initStatus">no start image · txt2img mode</div>
+        <div class="row-actions">
+          <button class="chip cyan" id="pickInit"><span class="glyph">↑</span> upload start</button>
+          <button class="chip" id="clearInit" style="display:none">clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">
+      <h2>animation engine</h2>
+      <div class="meta">per-frame</div>
+    </div>
+
+    <div class="mode-caption">
+      <span class="accent">seed drift mode:</span> each frame is generated fresh from the prompt with a slowly drifting seed. transforms apply directly to each frame. animation continuity comes from the seed evolution + your transforms.
+    </div>
+
+    <!-- CAMERA accordion -->
+    <div class="accordion open" id="acc-camera">
+      <div class="accordion-head" data-acc="camera">
+        <div class="left">
+          <span class="icon">◉</span>
+          <span class="name">camera</span>
+        </div>
+        <span class="summary" id="sum-camera">zoom 1.020 · pan 0,0 · rot +0.5°</span>
+        <span class="chev">▾</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-inner">
+          <div class="slider-row">
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">zoom</span>
+                <span class="ctrl-val" id="zoomVal">1.020</span>
+              </div>
+              <input type="range" id="zoom" min="0.90" max="1.10" step="0.005" value="1.02"/>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">rotate°</span>
+                <span class="ctrl-val" id="rotateVal">+0.5</span>
+              </div>
+              <input type="range" id="rotate" min="-5" max="5" step="0.1" value="0.5"/>
+            </div>
+          </div>
+          <div class="slider-row">
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">pan x px</span>
+                <span class="ctrl-val" id="panXVal">+0</span>
+              </div>
+              <input type="range" id="panX" min="-30" max="30" step="1" value="0"/>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">pan y px</span>
+                <span class="ctrl-val" id="panYVal">+0</span>
+              </div>
+              <input type="range" id="panY" min="-30" max="30" step="1" value="0"/>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLOR accordion -->
+    <div class="accordion" id="acc-color">
+      <div class="accordion-head" data-acc="color">
+        <div class="left">
+          <span class="icon">◐</span>
+          <span class="name">color</span>
+        </div>
+        <span class="summary" id="sum-color">hue 0° · sat 1.00 · bright 1.00</span>
+        <span class="chev">▾</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-inner">
+          <div class="slider-row">
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">hue shift°</span>
+                <span class="ctrl-val" id="hueVal">+0</span>
+              </div>
+              <input type="range" id="hue" min="-15" max="15" step="0.5" value="0"/>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">saturation</span>
+                <span class="ctrl-val" id="satVal">1.00</span>
+              </div>
+              <input type="range" id="sat" min="0.5" max="1.5" step="0.02" value="1.0"/>
+            </div>
+          </div>
+          <div class="slider-row">
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">brightness</span>
+                <span class="ctrl-val" id="brightVal">1.00</span>
+              </div>
+              <input type="range" id="bright" min="0.7" max="1.3" step="0.02" value="1.0"/>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">contrast</span>
+                <span class="ctrl-val" id="contrastVal">1.00</span>
+              </div>
+              <input type="range" id="contrast" min="0.7" max="1.3" step="0.02" value="1.0"/>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI accordion -->
+    <div class="accordion open" id="acc-ai">
+      <div class="accordion-head" data-acc="ai">
+        <div class="left">
+          <span class="icon">▦</span>
+          <span class="name">ai</span>
+        </div>
+        <span class="summary" id="sum-ai">blend 0.45 · drift 3 · flux</span>
+        <span class="chev">▾</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-inner">
+          <div class="slider-row">
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">blend opacity</span>
+                <span class="ctrl-val" id="strengthVal">0.45</span>
+              </div>
+              <input type="range" id="strength" min="0.1" max="0.9" step="0.05" value="0.45"/>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-head">
+                <span class="ctrl-name">seed drift</span>
+                <span class="ctrl-val" id="driftVal">3</span>
+              </div>
+              <input type="range" id="drift" min="0" max="20" step="1" value="3"/>
+            </div>
+          </div>
+          <!-- Model on its own row, full width — frames lives in Timing panel -->
+          <div class="slider-row single">
+            <div class="ctrl" style="display:flex; flex-direction:column;">
+              <div class="ctrl-head">
+                <span class="ctrl-name">model</span>
+                <span class="ctrl-val" id="modelVal" style="font-size:11px;">flux-schnell</span>
+              </div>
+              <select id="modelSelect" style="background:rgba(0,0,0,0.4); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font-family:'JetBrains Mono',monospace; font-size:11px; outline:none; margin-top:2px;">
+                <option value="flux-schnell">flux schnell · fast (recommended)</option>
+                <option value="flux-2-klein">flux 2 klein · balanced</option>
+                <option value="lucid-origin">lucid origin · artistic</option>
+                <option value="phoenix">phoenix · cinematic</option>
+              </select>
+            </div>
+          </div>
+          <!-- Hidden frames slider — kept for JS compatibility, controlled by Timing panel -->
+          <input type="range" id="iter" min="2" max="60" step="1" value="12" style="display:none;"/>
+          <span id="iterVal" style="display:none;">12</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" id="resetTransforms">↺ reset all transforms</button>
+
+    <div class="row-actions" style="margin-top:12px;">
+      <button class="chip" id="openSettingsLib"><span class="glyph">▦</span> presets</button>
+      <button class="chip plasma" id="saveSettings"><span class="glyph">+</span> save preset</button>
+    </div>
+  </div>
+
+  <!-- Timing: frames count + framerate presets -->
+  <div class="panel">
+    <div class="section-title">
+      <h2>timing</h2>
+      <div class="meta">duration · speed</div>
+    </div>
+
+    <!-- Frames count -->
+    <div class="ctrl" style="margin-bottom: 12px;">
+      <div class="ctrl-head">
+        <span class="ctrl-name">total frames</span>
+        <span class="ctrl-val" id="iterValTiming">12</span>
+      </div>
+      <input type="range" id="iterTiming" min="2" max="60" step="1" value="12"/>
+      <div style="display:flex; gap:4px; margin-top:8px;">
+        <button class="frame-preset" data-frames="6">6</button>
+        <button class="frame-preset" data-frames="12">12</button>
+        <button class="frame-preset" data-frames="24">24</button>
+        <button class="frame-preset" data-frames="36">36</button>
+        <button class="frame-preset" data-frames="48">48</button>
+        <button class="frame-preset" data-frames="60">60</button>
+      </div>
+    </div>
+
+    <!-- Framerate -->
+    <div class="ctrl">
+      <div class="ctrl-head">
+        <span class="ctrl-name">framerate</span>
+        <span class="ctrl-val" id="fpsValTiming">8 fps</span>
+      </div>
+      <input type="range" id="fpsTiming" min="2" max="60" step="1" value="8"/>
+      <div style="display:flex; gap:4px; margin-top:8px; flex-wrap: wrap;">
+        <button class="fps-preset" data-fps="8">8 · slow</button>
+        <button class="fps-preset" data-fps="12">12 · animation</button>
+        <button class="fps-preset" data-fps="24">24 · film</button>
+        <button class="fps-preset" data-fps="30">30 · video</button>
+        <button class="fps-preset" data-fps="60">60 · smooth</button>
+      </div>
+    </div>
+
+    <!-- Duration estimate -->
+    <div id="durationEstimate" style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line); font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.2em; text-align:center;">
+      estimated duration: <span id="durValue" style="color:var(--cyan); font-family:'Major Mono Display',monospace;">1.5s</span>
+    </div>
+
+    <!-- Seed control -->
+    <div class="seed-row">
+      <span class="seed-label">seed</span>
+      <input type="number" class="seed-input" id="seedInput" value="0" min="0" max="999999999" />
+      <button class="seed-btn" id="seedRandom" title="randomize">⟳</button>
+      <button class="seed-btn" id="seedLock" title="lock seed for reproducibility">🔒</button>
+      <button class="seed-btn" id="seedCopy" title="copy seed">⎘</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="actions">
+      <button class="primary" id="runBtn">▶ run</button>
+      <button class="ghost cyan" id="continueBtn" disabled>+ extend</button>
+      <button class="ghost danger" id="stopBtn" disabled>■ stop</button>
+    </div>
+    <div class="actions" style="margin-top:8px;">
+      <button class="ghost" id="clearBtn" style="flex:1;">⌫ clear all frames</button>
+    </div>
+  </div>
+
+  <div class="panel filmstrip-panel">
+    <div class="filmstrip-head">
+      <div class="label"><span class="num">04</span>filmstrip</div>
+      <div class="label" id="filmCount">0 frames</div>
+    </div>
+    <div class="filmstrip" id="filmstrip">
+      <div class="filmstrip-empty">no frames yet · tap a frame to inspect</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="section-title">
+      <h2>export</h2>
+      <div class="meta">save artifact</div>
+    </div>
+    <div class="export-grid">
+      <button class="ghost mp4" id="exportMp4" disabled>
+        <span class="ico">▶</span>
+        mp4
+      </button>
+      <button class="ghost gif" id="exportGif" disabled>
+        <span class="ico">◐</span>
+        gif
+      </button>
+      <button class="ghost" id="exportZip" disabled>
+        <span class="ico">▦</span>
+        zip
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    aethermorph<span class="dot">·</span>v15
+  </footer>
+</div>
+
+<!-- Modals -->
+<div class="modal-bg" id="promptLibModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <h3>prompt library</h3>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body" id="promptLibBody"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="savePromptModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <h3>save prompt</h3>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="save-form">
+        <div class="label">name</div>
+        <input type="text" id="promptSaveName" placeholder="cosmic tunnel" maxlength="40" />
+        <div class="label">prompt text</div>
+        <div class="preview-text" id="promptSavePreview"></div>
+      </div>
+      <div class="row-actions">
+        <button class="chip plasma" id="confirmSavePrompt"><span class="glyph">✓</span> save</button>
+        <button class="chip" data-close>cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsLibModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <h3>preset library</h3>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body" id="settingsLibBody"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="saveSettingsModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <h3>save preset</h3>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="save-form">
+        <div class="label">name</div>
+        <input type="text" id="settingsSaveName" placeholder="slow drift" maxlength="40" />
+        <div class="label">current values</div>
+        <div class="preview-text" id="settingsSavePreview"></div>
+      </div>
+      <div class="row-actions">
+        <button class="chip plasma" id="confirmSaveSettings"><span class="glyph">✓</span> save</button>
+        <button class="chip" data-close>cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="frameInspectModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <h3>frame inspect</h3>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="frame-inspect"><img id="inspectImg" alt="" /></div>
+      <div class="frame-inspect-meta" id="inspectMeta">F · 000</div>
+      <div class="frame-actions">
+        <button class="chip cyan" id="rewindToFrame"><span class="glyph">↻</span> rewind & continue</button>
+        <button class="chip" id="downloadFrame"><span class="glyph">↓</span> download png</button>
+        <button class="chip plasma" id="setAsInit"><span class="glyph">⇡</span> use as start</button>
+        <button class="chip" id="deleteFrame" style="color:var(--plasma); border-color:rgba(255,77,210,0.3);"><span class="glyph">×</span> delete frame</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* AETHERMORPH v2 · Tier 1 */
+const $ = (id) => document.getElementById(id);
+
+// ===== Prompt mode state (declared early so init code can reference it) =====
+// PMODE: 'single' = use the single textarea prompt; 'keyframes' = blend
+// between an array of prompts assigned to specific frame numbers.
+let PMODE = 'single';
+const KEYFRAMES = [
+  { frame: 0,  text: 'a misty forest at dawn, soft golden light filtering through tall trees' },
+  { frame: 11, text: 'a glowing crystal cathedral, ethereal architecture, prismatic light' },
+];
+
+// ===== Seed state (declared early so syncSeedUI can run during init) =====
+// SEED is the linchpin of animation continuity. Each frame uses a slightly
+// different seed (controlled by "seed drift" slider) — same seed gives the
+// SAME image, drifting seeds give RELATED but evolving images.
+const SEED = {
+  base: Math.floor(Math.random() * 1_000_000),
+  current: 0,
+  locked: false,
+};
+function newSeedRun() {
+  if (!SEED.locked) SEED.base = Math.floor(Math.random() * 1_000_000);
+  SEED.current = SEED.base;
+  const si = $('seedInput'); if (si) si.value = SEED.base;
+}
+const LS_KEYS = {
+  prompts: 'aethermorph.prompts.v1',
+  settings: 'aethermorph.settings.v1',
+};
+
+// Migrate from any v1 deforum keys (one-time)
+try {
+  const oldP = localStorage.getItem('deforum.prompts.v1');
+  const oldS = localStorage.getItem('deforum.settings.v1');
+  if (oldP && !localStorage.getItem(LS_KEYS.prompts))   localStorage.setItem(LS_KEYS.prompts, oldP);
+  if (oldS && !localStorage.getItem(LS_KEYS.settings))  localStorage.setItem(LS_KEYS.settings, oldS);
+} catch {}
+
+// ---------- ASPECT RATIOS / CANVAS SIZE ----------
+const ASPECT_RATIOS = {
+  '16:9':  { w: 1024, h: 576,  label: '16:9 widescreen' },
+  '1:1':   { w: 1024, h: 1024, label: '1:1 square' },
+  '9:16':  { w: 576,  h: 1024, label: '9:16 vertical' },
+  '4:5':   { w: 1024, h: 1280, label: '4:5 portrait' },
+  '21:9':  { w: 1024, h: 432,  label: '21:9 cinematic' },
+  '2:3':   { w: 832,  h: 1248, label: '2:3 photo' },
+  '3:2':   { w: 1248, h: 832,  label: '3:2 landscape' },
+};
+let CURRENT_ASPECT = '16:9';
+const CANVAS = { w: ASPECT_RATIOS[CURRENT_ASPECT].w, h: ASPECT_RATIOS[CURRENT_ASPECT].h };
+
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+const playCanvas = $('playCanvas');
+const playCtx = playCanvas.getContext('2d');
+
+// Apply the current aspect ratio to all relevant DOM elements
+function applyAspectRatio(key) {
+  const ar = ASPECT_RATIOS[key];
+  if (!ar) return;
+  CURRENT_ASPECT = key;
+  CANVAS.w = ar.w;
+  CANVAS.h = ar.h;
+  canvas.width = ar.w;
+  canvas.height = ar.h;
+  playCanvas.width = ar.w;
+  playCanvas.height = ar.h;
+  // Update CSS aspect-ratio of stage so it scales properly
+  const stage = $('stage');
+  if (stage) stage.style.aspectRatio = `${ar.w} / ${ar.h}`;
+  // Update overlay resolution label
+  const resLabel = $('resLabel');
+  if (resLabel) resLabel.textContent = `${ar.w}×${ar.h}`;
+  // Repaint background
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+}
+
+applyAspectRatio(CURRENT_ASPECT);
+
+const STATE = {
+  running: false,
+  abort: false,
+  frames: [],
+  startTime: 0,
+  totalFrames: 0,
+  initImageDataUrl: null,
+  playing: false,
+  playIndex: 0,
+  playTimer: null,
+  continuing: false,
+  inspectIndex: -1,
+};
+
+function haptic(ms = 10) {
+  if (navigator.vibrate) try { navigator.vibrate(ms); } catch {}
+}
+
+function lsGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { console.warn('localStorage write failed', e); }
+}
+
+let promptsLib = lsGet(LS_KEYS.prompts, []);
+let settingsLib = lsGet(LS_KEYS.settings, []);
+
+function toast(msg, kind = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + kind;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.className = 'toast ' + kind, 2400);
+}
+
+function setStatus(text, mode = 'idle') {
+  $('statusText').textContent = text;
+  $('statusDot').className = 'status-dot ' + mode;
+}
+function setProgress(cur, total, label = '') {
+  const pct = total > 0 ? (cur / total) * 100 : 0;
+  $('progressBar').style.width = pct + '%';
+  $('progressFrac').textContent = `${cur} / ${total}`;
+  if (label) $('progressLabel').textContent = label;
+}
+function setOverlay({ frame, mode, time, recording }) {
+  if (frame !== undefined) $('frameLabel').textContent = 'F · ' + String(frame).padStart(3, '0');
+  if (mode !== undefined) $('modeLabel').textContent = mode;
+  if (time !== undefined) $('timeLabel').textContent = time;
+  if (recording !== undefined) $('stageOverlay').classList.toggle('recording', recording);
+}
+function elapsedStr() {
+  const s = Math.floor((performance.now() - STATE.startTime) / 1000);
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+const sliderIds = ['zoom', 'rotate', 'panX', 'panY', 'hue', 'sat', 'bright', 'contrast', 'strength', 'iter', 'drift'];
+sliderIds.forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  const fill = () => {
+    const min = parseFloat(el.min), max = parseFloat(el.max);
+    const pct = ((parseFloat(el.value) - min) / (max - min)) * 100;
+    el.style.setProperty('--fill', pct + '%');
+    updateLabel(id);
+    updateAccordionSummaries();
+  };
+  el.addEventListener('input', fill);
+  fill();
+});
+function updateLabel(id) {
+  const el = $(id);
+  const v = parseFloat(el.value);
+  if (id === 'zoom')     $('zoomVal').textContent     = v.toFixed(3);
+  if (id === 'rotate')   $('rotateVal').textContent   = (v >= 0 ? '+' : '') + v.toFixed(1);
+  if (id === 'panX')     $('panXVal').textContent     = (v >= 0 ? '+' : '') + Math.round(v);
+  if (id === 'panY')     $('panYVal').textContent     = (v >= 0 ? '+' : '') + Math.round(v);
+  if (id === 'hue')      $('hueVal').textContent      = (v >= 0 ? '+' : '') + v.toFixed(1);
+  if (id === 'sat')      $('satVal').textContent      = v.toFixed(2);
+  if (id === 'bright')   $('brightVal').textContent   = v.toFixed(2);
+  if (id === 'contrast') $('contrastVal').textContent = v.toFixed(2);
+  if (id === 'strength') $('strengthVal').textContent = v.toFixed(2);
+  if (id === 'iter')     $('iterVal').textContent     = v.toString();
+  if (id === 'drift')    $('driftVal').textContent    = v.toString();
+}
+
+// Update accordion header summaries so collapsed sections show current values
+function updateAccordionSummaries() {
+  const z = parseFloat($('zoom').value).toFixed(3);
+  const r = parseFloat($('rotate').value);
+  const px = Math.round(parseFloat($('panX').value));
+  const py = Math.round(parseFloat($('panY').value));
+  $('sum-camera').textContent = `zoom ${z} · pan ${px},${py} · rot ${r >= 0 ? '+' : ''}${r.toFixed(1)}°`;
+
+  const h = parseFloat($('hue').value);
+  const s = parseFloat($('sat').value).toFixed(2);
+  const b = parseFloat($('bright').value).toFixed(2);
+  $('sum-color').textContent = `hue ${h >= 0 ? '+' : ''}${h.toFixed(1)}° · sat ${s} · bright ${b}`;
+
+  const blend = parseFloat($('strength').value).toFixed(2);
+  const drift = $('drift').value;
+  const frames = $('iter').value;
+  const model = $('modelSelect').value;
+  $('sum-ai').textContent = `blend ${blend} · drift ${drift} · ${model}`;
+}
+
+// Model select label sync
+$('modelSelect').addEventListener('change', (e) => {
+  $('modelVal').textContent = e.target.value;
+  updateAccordionSummaries();
+});
+
+// Accordion expand/collapse
+document.querySelectorAll('.accordion-head').forEach(head => {
+  head.addEventListener('click', () => {
+    const acc = head.closest('.accordion');
+    acc.classList.toggle('open');
+    haptic(8);
+  });
+});
+
+// ===== Timing panel sync =====
+// The timing panel has its own frames/fps sliders that mirror to the
+// existing `iter` and `playFps` sliders. Both directions stay in sync.
+function setFrames(n) {
+  n = Math.max(2, Math.min(60, parseInt(n)));
+  $('iter').value = n;
+  $('iterTiming').value = n;
+  $('iter').dispatchEvent(new Event('input'));
+  $('iterTiming').dispatchEvent(new Event('input'));
+  // Highlight matching preset
+  document.querySelectorAll('.frame-preset').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.frames) === n);
+  });
+  // Clamp keyframes that exceed new max
+  if (typeof KEYFRAMES !== 'undefined') {
+    KEYFRAMES.forEach(kf => { if (kf.frame > n - 1) kf.frame = n - 1; });
+    if (PMODE === 'keyframes') renderKeyframes();
+  }
+  updateDuration();
+}
+function setFps(n) {
+  n = Math.max(2, Math.min(60, parseInt(n)));
+  $('playFps').value = n;
+  $('fpsTiming').value = n;
+  $('playFps').dispatchEvent(new Event('input'));
+  // Update timing fps slider visual
+  const min = 2, max = 60;
+  $('fpsTiming').style.setProperty('--fill', ((n - min) / (max - min) * 100) + '%');
+  $('fpsValTiming').textContent = n + ' fps';
+  // Highlight matching preset
+  document.querySelectorAll('.fps-preset').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.fps) === n);
+  });
+  if (STATE.playing) restartPlayback();
+  updateDuration();
+}
+function updateDuration() {
+  const frames = parseInt($('iter').value);
+  const fps = parseInt($('playFps').value);
+  const seconds = (frames / fps).toFixed(2);
+  $('durValue').textContent = seconds + 's';
+}
+
+// Wire timing sliders
+$('iterTiming').addEventListener('input', (e) => {
+  const n = parseInt(e.target.value);
+  $('iterValTiming').textContent = n;
+  const min = 2, max = 60;
+  e.target.style.setProperty('--fill', ((n - min) / (max - min) * 100) + '%');
+  // Sync to main iter slider (without recursive event)
+  $('iter').value = n;
+  $('iterVal').textContent = n;
+  const ratio = ((n - parseFloat($('iter').min)) / (parseFloat($('iter').max) - parseFloat($('iter').min))) * 100;
+  $('iter').style.setProperty('--fill', ratio + '%');
+  document.querySelectorAll('.frame-preset').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.frames) === n);
+  });
+  // Clamp keyframes that now exceed max and re-render timeline
+  if (typeof KEYFRAMES !== 'undefined') {
+    KEYFRAMES.forEach(kf => { if (kf.frame > n - 1) kf.frame = n - 1; });
+    if (PMODE === 'keyframes') renderKeyframes();
+  }
+  updateAccordionSummaries();
+  updateDuration();
+});
+
+$('fpsTiming').addEventListener('input', (e) => {
+  const n = parseInt(e.target.value);
+  $('fpsValTiming').textContent = n + ' fps';
+  const min = 2, max = 60;
+  e.target.style.setProperty('--fill', ((n - min) / (max - min) * 100) + '%');
+  // Sync to playFps slider
+  $('playFps').value = n;
+  $('playFps').dispatchEvent(new Event('input'));
+  document.querySelectorAll('.fps-preset').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.fps) === n);
+  });
+  updateDuration();
+});
+
+// Frame preset pill clicks
+document.querySelectorAll('.frame-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setFrames(parseInt(btn.dataset.frames));
+    haptic();
+  });
+});
+
+// FPS preset pill clicks
+document.querySelectorAll('.fps-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setFps(parseInt(btn.dataset.fps));
+    haptic();
+  });
+});
+
+// Initialize timing UI
+setFrames(12);
+setFps(8);
+
+// Mode is now fixed to txt2img with seed drift (no img2img, no blending toggle)
+const MODE = 'warp'; // legacy variable kept for runLoop compatibility
+
+// =====================================================================
+// KEYFRAME PROMPTS
+// =====================================================================
+// (KEYFRAMES + PMODE state declared at top of script so they're available
+//  to setFrames() which runs during init.)
+
+// Prompt mode toggle
+document.querySelectorAll('.mode-toggle button[data-pmode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    PMODE = btn.dataset.pmode;
+    document.querySelectorAll('.mode-toggle button[data-pmode]').forEach(b => b.classList.toggle('active', b === btn));
+    $('singleMode').style.display     = (PMODE === 'single')    ? '' : 'none';
+    $('keyframesMode').style.display  = (PMODE === 'keyframes') ? '' : 'none';
+    $('promptMeta').textContent = (PMODE === 'single') ? 'vision seed' : `${KEYFRAMES.length} keyframes`;
+    if (PMODE === 'keyframes') renderKeyframes();
+    haptic(10);
+  });
+});
+
+// Render keyframe list and visual timeline
+function renderKeyframes() {
+  const list = $('kfList');
+  const track = $('kfTrack');
+  const labels = $('kfLabels');
+  const totalFrames = parseInt($('iter').value);
+  list.innerHTML = '';
+  if (track) track.parentElement.querySelectorAll('.kf-marker').forEach(m => m.remove());
+
+  // Sort keyframes by frame number for display
+  const sorted = [...KEYFRAMES].sort((a, b) => a.frame - b.frame);
+
+  sorted.forEach((kf, displayIdx) => {
+    const realIdx = KEYFRAMES.indexOf(kf);
+
+    // Timeline marker
+    const marker = document.createElement('div');
+    marker.className = 'kf-marker';
+    const pct = totalFrames > 1 ? (kf.frame / (totalFrames - 1)) * 100 : 0;
+    marker.style.left = `calc(8px + ${Math.max(0, Math.min(100, pct))}% * (100% - 16px) / 100%)`;
+    marker.innerHTML = `<span class="label">F${kf.frame}</span>`;
+    track.parentElement.appendChild(marker);
+
+    // List item
+    const item = document.createElement('div');
+    item.className = 'kf-item';
+    item.innerHTML = `
+      <div class="kf-head">
+        <span class="kf-num">KF ${String(displayIdx + 1).padStart(2, '0')}</span>
+        <div class="kf-frame-input">
+          <label>at frame</label>
+          <button class="kf-step" data-step="-1" data-idx="${realIdx}" type="button">−</button>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" value="${kf.frame}" data-idx="${realIdx}" class="kf-frame-num" maxlength="3"/>
+          <button class="kf-step" data-step="1" data-idx="${realIdx}" type="button">+</button>
+        </div>
+        ${KEYFRAMES.length > 1 ? `<button class="kf-delete" data-idx="${realIdx}" title="delete">×</button>` : '<span style="width:26px"></span>'}
+      </div>
+      <textarea class="kf-text" data-idx="${realIdx}" placeholder="describe this keyframe…">${escapeHtml(kf.text)}</textarea>
+    `;
+    list.appendChild(item);
+  });
+
+  // Wire up the inputs
+  list.querySelectorAll('.kf-text').forEach(ta => {
+    ta.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      KEYFRAMES[idx].text = e.target.value;
+    });
+  });
+  list.querySelectorAll('.kf-frame-num').forEach(inp => {
+    // Sanitize on input but don't re-render until blur (avoids re-render mid-typing)
+    inp.addEventListener('input', (e) => {
+      // Strip non-digits as user types
+      e.target.value = e.target.value.replace(/[^0-9]/g, '');
+    });
+    inp.addEventListener('change', (e) => commitFrameNumber(e.target));
+    inp.addEventListener('blur', (e) => commitFrameNumber(e.target));
+  });
+  // Stepper buttons (- / +)
+  list.querySelectorAll('.kf-step').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      const step = parseInt(e.currentTarget.dataset.step);
+      const max = parseInt($('iter').value) - 1;
+      const cur = KEYFRAMES[idx].frame;
+      const next = Math.max(0, Math.min(max, cur + step));
+      if (next === cur) return;
+      KEYFRAMES[idx].frame = next;
+      renderKeyframes();
+      haptic(8);
+    });
+  });
+  list.querySelectorAll('.kf-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      if (KEYFRAMES.length <= 1) return;
+      if (!confirm(`Delete this keyframe?`)) return;
+      KEYFRAMES.splice(idx, 1);
+      renderKeyframes();
+      $('promptMeta').textContent = `${KEYFRAMES.length} keyframes`;
+      haptic();
+    });
+  });
+
+  function commitFrameNumber(target) {
+    const idx = parseInt(target.dataset.idx);
+    let v = parseInt(target.value);
+    if (isNaN(v)) v = 0;
+    v = Math.max(0, Math.min(parseInt($('iter').value) - 1, v));
+    KEYFRAMES[idx].frame = v;
+    renderKeyframes();
+  }
+
+  $('promptMeta').textContent = `${KEYFRAMES.length} keyframes`;
+}
+
+// Add keyframe button
+$('addKeyframe').addEventListener('click', () => {
+  const totalFrames = parseInt($('iter').value);
+  const lastIdx = totalFrames - 1;
+  const sorted = [...KEYFRAMES].sort((a, b) => a.frame - b.frame);
+
+  // Find the biggest gap between consecutive keyframes (or between
+  // the last keyframe and the final frame), and place the new keyframe
+  // in the middle of that gap.
+  let bestGap = 0;
+  let bestMidpoint = lastIdx;
+
+  // Gaps between consecutive keyframes
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gap = sorted[i + 1].frame - sorted[i].frame;
+    if (gap > bestGap) {
+      bestGap = gap;
+      bestMidpoint = sorted[i].frame + Math.floor(gap / 2);
+    }
+  }
+  // Gap from last keyframe to end
+  const tailGap = lastIdx - sorted[sorted.length - 1].frame;
+  if (tailGap > bestGap) {
+    bestGap = tailGap;
+    bestMidpoint = sorted[sorted.length - 1].frame + Math.floor(tailGap / 2);
+  }
+  // If no gap found (all keyframes packed at one frame), put at end
+  if (bestGap === 0) bestMidpoint = lastIdx;
+
+  // Avoid placing on top of an existing keyframe
+  const existing = new Set(KEYFRAMES.map(k => k.frame));
+  while (existing.has(bestMidpoint) && bestMidpoint < lastIdx) bestMidpoint++;
+  while (existing.has(bestMidpoint) && bestMidpoint > 0) bestMidpoint--;
+
+  KEYFRAMES.push({ frame: bestMidpoint, text: '' });
+  renderKeyframes();
+  haptic();
+});
+
+// "Library" button in keyframes mode loads into the most recently focused textarea
+$('openPromptLib2') && $('openPromptLib2').addEventListener('click', () => {
+  // Reuse the existing prompt library opener — but load destination is tracked
+  KF_LIB_TARGET = document.activeElement && document.activeElement.classList.contains('kf-text')
+    ? parseInt(document.activeElement.dataset.idx)
+    : 0; // default to first KF
+  openPromptLib(true);
+});
+let KF_LIB_TARGET = -1;
+
+// =====================================================================
+// PROMPT BUILDER — generates the prompt string for a given frame index.
+// In single mode, returns the textarea text.
+// In keyframes mode, blends prompts of surrounding keyframes by mixing
+// phrases proportionally to the frame's position between them.
+// =====================================================================
+function getPromptForFrame(frameIdx, totalFrames) {
+  if (PMODE === 'single') {
+    return $('prompt').value.trim();
+  }
+
+  // Keyframes mode
+  const kfs = [...KEYFRAMES].sort((a, b) => a.frame - b.frame);
+  if (kfs.length === 0) return '';
+  if (kfs.length === 1) return kfs[0].text.trim();
+
+  // Find surrounding keyframes
+  let before = kfs[0];
+  let after = kfs[kfs.length - 1];
+  for (let i = 0; i < kfs.length - 1; i++) {
+    if (frameIdx >= kfs[i].frame && frameIdx <= kfs[i + 1].frame) {
+      before = kfs[i];
+      after = kfs[i + 1];
+      break;
+    }
+  }
+  // Edge cases: before first or after last
+  if (frameIdx <= kfs[0].frame) return kfs[0].text.trim();
+  if (frameIdx >= kfs[kfs.length - 1].frame) return kfs[kfs.length - 1].text.trim();
+
+  // Calculate blend ratio (0 = fully `before`, 1 = fully `after`)
+  const span = after.frame - before.frame;
+  const t = span > 0 ? (frameIdx - before.frame) / span : 0;
+
+  return blendPrompts(before.text, after.text, t);
+}
+
+// Text-based prompt blending. Splits each prompt into phrases and weaves
+// them based on the blend ratio. The earlier prompt's phrases dominate
+// at low t, the later's dominate at high t, with mixing in the middle.
+function blendPrompts(a, b, t) {
+  a = a.trim(); b = b.trim();
+  if (!a) return b;
+  if (!b) return a;
+  if (t <= 0.05) return a;
+  if (t >= 0.95) return b;
+
+  // Split each into comma-separated phrases (typical prompt structure)
+  const aPhrases = a.split(/,\s*/).filter(Boolean);
+  const bPhrases = b.split(/,\s*/).filter(Boolean);
+
+  // Decide how many phrases to take from each based on blend ratio
+  // Lower t = more A phrases first; Higher t = more B phrases first
+  const total = Math.max(aPhrases.length, bPhrases.length, 3);
+  const aCount = Math.round((1 - t) * total);
+  const bCount = Math.round(t * total);
+
+  const result = [];
+  // Lead with the dominant prompt's first phrase (it's usually the "subject")
+  if (t < 0.5) {
+    result.push(aPhrases[0]);
+    if (bPhrases[0] && t > 0.2) result.push(`with hints of ${bPhrases[0]}`);
+    // Add modifier phrases from both
+    for (let i = 1; i < aCount && i < aPhrases.length; i++) result.push(aPhrases[i]);
+    for (let i = 1; i < Math.min(2, bCount) && i < bPhrases.length; i++) result.push(bPhrases[i]);
+  } else {
+    result.push(bPhrases[0]);
+    if (aPhrases[0] && t < 0.8) result.push(`with traces of ${aPhrases[0]}`);
+    for (let i = 1; i < bCount && i < bPhrases.length; i++) result.push(bPhrases[i]);
+    for (let i = 1; i < Math.min(2, aCount) && i < aPhrases.length; i++) result.push(aPhrases[i]);
+  }
+
+  return result.join(', ');
+}
+
+// =====================================================================
+// SEED CONTROL UI
+// =====================================================================
+function syncSeedUI() {
+  $('seedInput').value = SEED.base;
+  $('seedInput').classList.toggle('locked', SEED.locked);
+  $('seedLock').classList.toggle('active', SEED.locked);
+  $('seedLock').textContent = SEED.locked ? '🔒' : '🔓';
+}
+$('seedInput').addEventListener('input', (e) => {
+  let v = parseInt(e.target.value);
+  if (isNaN(v) || v < 0) v = 0;
+  SEED.base = v;
+});
+$('seedRandom').addEventListener('click', () => {
+  SEED.base = Math.floor(Math.random() * 1_000_000);
+  syncSeedUI();
+  toast('seed randomized');
+  haptic();
+});
+$('seedLock').addEventListener('click', () => {
+  SEED.locked = !SEED.locked;
+  syncSeedUI();
+  toast(SEED.locked ? 'seed locked — same render every run' : 'seed unlocked');
+  haptic(15);
+});
+$('seedCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(String(SEED.base));
+    toast('seed copied: ' + SEED.base, 'success');
+  } catch {
+    toast('copy failed — seed is ' + SEED.base);
+  }
+  haptic();
+});
+syncSeedUI();
+
+// Reset transforms
+$('resetTransforms').addEventListener('click', () => {
+  if (!confirm('Reset all transform values to neutral?')) return;
+  $('zoom').value = 1.0;
+  $('rotate').value = 0;
+  $('panX').value = 0;
+  $('panY').value = 0;
+  $('hue').value = 0;
+  $('sat').value = 1.0;
+  $('bright').value = 1.0;
+  $('contrast').value = 1.0;
+  ['zoom','rotate','panX','panY','hue','sat','bright','contrast'].forEach(id => $(id).dispatchEvent(new Event('input')));
+  toast('transforms reset', 'success');
+  haptic();
+});
+
+// Aspect ratio pill selector
+document.querySelectorAll('.aspect-pills button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (STATE.running) {
+      toast('finish current render first', 'error');
+      return;
+    }
+    if (STATE.frames.length > 0) {
+      if (!confirm('Changing aspect ratio will clear current frames. Continue?')) return;
+      STATE.frames = [];
+      LAST_FRAME_URL = null;
+      rebuildFilmstrip();
+      $('stageEmpty').classList.remove('hidden');
+      $('continueBtn').disabled = true;
+      $('exportMp4').disabled = true;
+      $('exportGif').disabled = true;
+      $('exportZip').disabled = true;
+    }
+    const ar = btn.dataset.ar;
+    applyAspectRatio(ar);
+    document.querySelectorAll('.aspect-pills button').forEach(b => b.classList.toggle('active', b === btn));
+    toast(`aspect ${ar}`, 'success');
+    haptic();
+  });
+});
+
+$('playFps').addEventListener('input', (e) => {
+  const v = parseInt(e.target.value);
+  $('playFpsVal').textContent = v + ' fps';
+  const min = 2, max = 30;
+  e.target.style.setProperty('--fill', ((v - min) / (max - min) * 100) + '%');
+  if (STATE.playing) restartPlayback();
+});
+$('playFps').dispatchEvent(new Event('input'));
+
+function warpCanvas(zoomFactor, rotateDeg, panX = 0, panY = 0, hueDeg = 0, sat = 1, bright = 1, contrast = 1) {
+  // Snapshot current canvas
+  const snap = document.createElement('canvas');
+  snap.width = CANVAS.w; snap.height = CANVAS.h;
+  snap.getContext('2d').drawImage(canvas, 0, 0);
+
+  ctx.save();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+
+  // Apply color filters via canvas filter property
+  const filters = [];
+  if (hueDeg !== 0)   filters.push(`hue-rotate(${hueDeg}deg)`);
+  if (sat !== 1)      filters.push(`saturate(${sat})`);
+  if (bright !== 1)   filters.push(`brightness(${bright})`);
+  if (contrast !== 1) filters.push(`contrast(${contrast})`);
+  ctx.filter = filters.length ? filters.join(' ') : 'none';
+
+  // Transform: translate to center, apply rotation+scale+pan, translate back
+  ctx.translate(CANVAS.w / 2 + panX, CANVAS.h / 2 + panY);
+  ctx.rotate(rotateDeg * Math.PI / 180);
+  ctx.scale(zoomFactor, zoomFactor);
+  ctx.translate(-CANVAS.w / 2, -CANVAS.h / 2);
+  ctx.drawImage(snap, 0, 0);
+  ctx.restore();
+}
+
+function getCanvasBase64() {
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
+function dataURLToImage(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+
+// ---------- CLOUDFLARE WORKERS AI ----------
+// Free tier: 10,000 neurons/day = ~700 Flux Schnell images/day
+// Endpoint: POST https://api.cloudflare.com/client/v4/accounts/{ACCT}/ai/run/@cf/black-forest-labs/flux-1-schnell
+// Body: { prompt, seed, steps? }
+// Response: { result: { image: "<base64-jpeg>" }, success: true, ... }
+
+const CF_MODELS = {
+  'flux-schnell':  { id: '@cf/black-forest-labs/flux-1-schnell',  label: 'flux schnell · fast',     maxSteps: 8,  defaultSteps: 4 },
+  'flux-2-klein':  { id: '@cf/black-forest-labs/flux-2-klein-4b', label: 'flux 2 klein · balanced', maxSteps: 12, defaultSteps: 6 },
+  'lucid-origin':  { id: '@cf/leonardo/lucid-origin',             label: 'lucid origin · artistic', maxSteps: 12, defaultSteps: 6 },
+  'phoenix':       { id: '@cf/leonardo/phoenix-1.0',              label: 'phoenix · cinematic',     maxSteps: 12, defaultSteps: 6 },
+};
+
+// Worker URL is the only thing the user needs to provide.
+// Their Worker calls Cloudflare AI on their behalf with proper CORS headers.
+const CF = {
+  workerUrl: '',
+  configured: false,
+};
+function loadCFCredentials() {
+  CF.workerUrl = lsGet('aethermorph.cf.workerUrl', '') || '';
+  // Migrate from old account-id/token storage if present
+  try { localStorage.removeItem('aethermorph.cf.accountId'); } catch {}
+  try { localStorage.removeItem('aethermorph.cf.apiToken'); } catch {}
+  CF.configured = !!CF.workerUrl;
+  return CF.configured;
+}
+function saveCFCredentials(workerUrl) {
+  CF.workerUrl = (workerUrl || '').trim().replace(/\/+$/, ''); // strip trailing slashes
+  CF.configured = !!CF.workerUrl;
+  lsSet('aethermorph.cf.workerUrl', CF.workerUrl);
+}
+function clearCFCredentials() {
+  CF.workerUrl = ''; CF.configured = false;
+  try { localStorage.removeItem('aethermorph.cf.workerUrl'); } catch {}
+}
+
+// LAST_FRAME_URL was for img2img chaining. Unused now but kept for compat.
+let LAST_FRAME_URL = null;
+
+// Call the user's Worker (which proxies to Cloudflare AI).
+// Returns { img: HTMLImageElement, url: <data-url> }.
+async function fetchCloudflareImage(prompt, seed, modelKey, _ignored = null, timeoutMs = 90000) {
+  if (!CF.configured) {
+    throw new Error('worker not connected — open the setup banner');
+  }
+  const model = CF_MODELS[modelKey] || CF_MODELS['flux-schnell'];
+
+  const body = {
+    prompt: prompt,
+    seed: Math.floor(seed) | 0,
+    steps: model.defaultSteps,
+    width: CANVAS.w,
+    height: CANVAS.h,
+    model: modelKey,
+  };
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(CF.workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') {
+      throw new Error(`generation timed out after ${Math.round(timeoutMs/1000)}s`);
+    }
+    throw new Error(`network error: ${e.message || e} — is your worker url correct?`);
+  }
+  clearTimeout(timer);
+
+  if (!response.ok) {
+    let errMsg = `worker returned ${response.status}`;
+    try {
+      const errBody = await response.json();
+      if (errBody && errBody.error) errMsg = errBody.error;
+    } catch {}
+    if (response.status === 404) {
+      errMsg = 'worker url not found — check the url is correct';
+    } else if (response.status === 429) {
+      errMsg = 'daily limit hit (10,000 neurons) — resets at 00:00 UTC';
+    } else if (response.status === 502) {
+      errMsg = 'worker error: ' + errMsg + ' — did you add the AI binding?';
+    }
+    throw new Error(errMsg);
+  }
+
+  // Worker always returns JSON: { image: "<base64>", model, seed }
+  const data = await response.json();
+  if (!data || !data.image) {
+    throw new Error('worker returned no image');
+  }
+  const dataUrl = `data:image/png;base64,${data.image}`;
+
+  // Load into HTMLImageElement
+  const img = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('failed to decode generated image'));
+    im.src = dataUrl;
+  });
+
+  return { img, url: dataUrl };
+}
+
+// Backwards-compat alias
+const fetchPollinationsImage = fetchCloudflareImage;
+
+// ---------- BLEND HELPER ----------
+// The "fake Deforum" trick: warp the previous canvas, then alpha-composite
+// the freshly-generated AI image on top at variable opacity.
+// Low opacity → mostly previous frame (smooth, sleepy tunneling)
+// High opacity → mostly new image (more chaotic, more change per frame)
+function blendNewFrame(newImg, opacity) {
+  // The canvas already contains the warped previous frame.
+  // Draw the new image on top at the requested opacity, cover-fit.
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  const ratio = Math.max(CANVAS.w / newImg.naturalWidth, CANVAS.h / newImg.naturalHeight);
+  const w = newImg.naturalWidth * ratio;
+  const h = newImg.naturalHeight * ratio;
+  const x = (CANVAS.w - w) / 2;
+  const y = (CANVAS.h - h) / 2;
+  ctx.drawImage(newImg, x, y, w, h);
+  ctx.restore();
+}
+
+function drawToCanvas(img, targetCtx = ctx) {
+  targetCtx.fillStyle = '#000';
+  targetCtx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+  const ratio = Math.max(CANVAS.w / img.naturalWidth, CANVAS.h / img.naturalHeight);
+  const w = img.naturalWidth * ratio;
+  const h = img.naturalHeight * ratio;
+  const x = (CANVAS.w - w) / 2;
+  const y = (CANVAS.h - h) / 2;
+  targetCtx.drawImage(img, x, y, w, h);
+}
+
+function rebuildFilmstrip() {
+  const strip = $('filmstrip');
+  strip.innerHTML = '';
+  if (STATE.frames.length === 0) {
+    strip.innerHTML = '<div class="filmstrip-empty">no frames yet · tap a frame to inspect</div>';
+    $('filmCount').textContent = '0 frames';
+    $('stage').classList.remove('has-frames');
+    return;
+  }
+  STATE.frames.forEach((dataUrl, i) => {
+    const fr = document.createElement('div');
+    fr.className = 'frame';
+    fr.dataset.i = String(i).padStart(3, '0');
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    fr.appendChild(img);
+    fr.addEventListener('click', () => openFrameInspect(i));
+    strip.appendChild(fr);
+  });
+  $('filmCount').textContent = STATE.frames.length + ' frame' + (STATE.frames.length === 1 ? '' : 's');
+  $('stage').classList.add('has-frames');
+}
+function pushFrameToStrip(dataUrl, idx) {
+  const strip = $('filmstrip');
+  const empty = strip.querySelector('.filmstrip-empty');
+  if (empty) empty.remove();
+  const fr = document.createElement('div');
+  fr.className = 'frame';
+  fr.dataset.i = String(idx).padStart(3, '0');
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  fr.appendChild(img);
+  fr.addEventListener('click', () => openFrameInspect(idx));
+  strip.appendChild(fr);
+  strip.scrollTo({ left: strip.scrollWidth, behavior: 'smooth' });
+  $('filmCount').textContent = STATE.frames.length + ' frame' + (STATE.frames.length === 1 ? '' : 's');
+  $('stage').classList.add('has-frames');
+}
+
+async function runLoop({ continuing = false } = {}) {
+  if (STATE.running) {
+    toast('already rendering — wait for current run to finish');
+    haptic(8);
+    return;
+  }
+  // Validate based on prompt mode
+  if (PMODE === 'single') {
+    if (!$('prompt').value.trim()) {
+      toast('enter a prompt first', 'error');
+      return;
+    }
+  } else {
+    // keyframes mode — need at least one with text
+    const hasText = KEYFRAMES.some(k => k.text && k.text.trim());
+    if (!hasText) {
+      toast('add at least one keyframe with text', 'error');
+      return;
+    }
+  }
+
+  if (STATE.playing) stopPlayback();
+
+  STATE.running = true;
+  STATE.abort = false;
+  STATE.continuing = continuing;
+  STATE.startTime = performance.now();
+
+  if (!continuing) {
+    STATE.frames = [];
+    rebuildFilmstrip();
+    newSeedRun();
+    LAST_FRAME_URL = null;
+  }
+
+  $('runBtn').disabled = true;
+  $('continueBtn').disabled = true;
+  $('stopBtn').disabled = false;
+  $('exportMp4').disabled = true;
+  $('exportGif').disabled = true;
+  $('exportZip').disabled = true;
+  $('stageEmpty').classList.add('hidden');
+
+  // Read all transform values
+  const zoom     = parseFloat($('zoom').value);
+  const rotate   = parseFloat($('rotate').value);
+  const panX     = parseFloat($('panX').value);
+  const panY     = parseFloat($('panY').value);
+  const hue      = parseFloat($('hue').value);
+  const sat      = parseFloat($('sat').value);
+  const bright   = parseFloat($('bright').value);
+  const contrast = parseFloat($('contrast').value);
+  const opacity  = parseFloat($('strength').value);
+  const drift    = parseInt($('drift').value);
+  let   model    = $('modelSelect').value;
+  const newFramesToAdd = parseInt($('iter').value);
+  const startIdx = continuing ? STATE.frames.length : 0;
+  const total = startIdx + newFramesToAdd;
+  STATE.totalFrames = total;
+
+  // In pure-AI mode, force a model that supports image input
+  const aiMode = (MODE === 'ai');
+  if (aiMode && !['kontext', 'nanobanana'].includes(model)) {
+    model = 'kontext';
+    toast('switched to kontext for img2img mode', '');
+  }
+
+  setOverlay({ recording: true });
+
+  try {
+    let firstNewFrame = startIdx;
+
+    if (continuing && STATE.frames.length > 0) {
+      const lastImg = await dataURLToImage(STATE.frames[STATE.frames.length - 1]);
+      drawToCanvas(lastImg);
+      SEED.current = SEED.base + (STATE.frames.length * (drift || 1));
+      setStatus(`extending`, 'gen');
+    } else {
+      // FRAME 0
+      setStatus('seeding', 'gen');
+      setProgress(0, total, 'generating frame 1');
+      setOverlay({ frame: 0, mode: aiMode ? '— ai morph —' : '— init —', time: elapsedStr() });
+
+      let initUrl = null;
+      const frame0Prompt = getPromptForFrame(0, total);
+      try {
+        const { img, url } = await fetchPollinationsImage(frame0Prompt, SEED.current, model);
+        if (STATE.abort) throw new Error('aborted');
+        drawToCanvas(img);
+        LAST_FRAME_URL = url;
+      } catch (e0) {
+        if (STATE.initImageDataUrl) {
+          console.warn('frame 0 generation failed, using init image:', e0);
+          const initImg = await dataURLToImage(STATE.initImageDataUrl);
+          drawToCanvas(initImg);
+          setOverlay({ mode: '— init fallback —', time: elapsedStr() });
+        } else {
+          throw e0;
+        }
+      }
+
+      const f0 = canvas.toDataURL('image/png');
+      STATE.frames.push(f0);
+      pushFrameToStrip(f0, 0);
+      setOverlay({ frame: 1, time: elapsedStr() });
+      firstNewFrame = 1;
+    }
+
+    // ---- FRAMES 1..N ----
+    for (let i = firstNewFrame; i < total; i++) {
+      if (STATE.abort) break;
+
+      SEED.current = SEED.base + (i * (drift || 1));
+      setStatus(`frame ${i + 1}/${total}`, 'gen');
+      setProgress(i, total, aiMode ? `ai morph (${i + 1}/${total})` : `warp → blend (${i + 1}/${total})`);
+
+      // Build the prompt for THIS specific frame (handles keyframe blending)
+      const framePrompt = getPromptForFrame(i, total);
+
+      if (aiMode) {
+        // ===== PURE AI MORPH MODE =====
+        // Chain: pass previous frame's URL as init image to the next call.
+        // No local canvas warping. Pure AI hallucination evolution.
+        setOverlay({
+          frame: i + 1,
+          mode: `ai morph · ${model} · seed ${SEED.current}`,
+          time: elapsedStr()
+        });
+
+        let result;
+        try {
+          result = await fetchPollinationsImage(framePrompt, SEED.current, model, LAST_FRAME_URL);
+        } catch (innerErr) {
+          console.warn('img2img fetch failed, retrying:', innerErr);
+          try {
+            result = await fetchPollinationsImage(framePrompt, SEED.current + 999, model, LAST_FRAME_URL);
+          } catch (e2) {
+            console.warn('retry failed, falling back to txt2img:', e2);
+            try {
+              result = await fetchPollinationsImage(framePrompt, SEED.current, model, null);
+            } catch (e3) {
+              console.warn('all attempts failed for this frame:', e3);
+              result = null;
+            }
+          }
+        }
+
+        if (STATE.abort) break;
+
+        if (result) {
+          drawToCanvas(result.img);
+          LAST_FRAME_URL = result.url;
+        }
+      } else {
+        // ===== SEED DRIFT MODE =====
+        // Pure txt2img per frame. Transforms apply directly to the new
+        // image (no fade between frames — clean replacement each tick).
+        setOverlay({
+          frame: i + 1,
+          mode: `seed ${SEED.current} · z${zoom.toFixed(2)} r${rotate.toFixed(1)}`,
+          time: elapsedStr()
+        });
+
+        // Fetch fresh AI image with drifted seed
+        let result;
+        try {
+          result = await fetchPollinationsImage(framePrompt, SEED.current, model);
+        } catch (innerErr) {
+          console.warn('fetch failed, retrying with bumped seed:', innerErr);
+          try {
+            result = await fetchPollinationsImage(framePrompt, SEED.current + 999, model);
+          } catch (e2) {
+            console.warn('retry also failed, skipping this frame:', e2);
+            result = null;
+          }
+        }
+
+        if (STATE.abort) break;
+
+        if (result) {
+          // Draw the new AI image to canvas (clean, no blend)
+          drawToCanvas(result.img);
+          // Apply per-frame transforms ON the new image (zoom/rotate/pan/color)
+          // so transforms still affect what gets saved as this frame.
+          if (zoom !== 1 || rotate !== 0 || panX !== 0 || panY !== 0 ||
+              hue !== 0 || sat !== 1 || bright !== 1 || contrast !== 1) {
+            warpCanvas(zoom, rotate, panX, panY, hue, sat, bright, contrast);
+          }
+          LAST_FRAME_URL = result.url;
+        }
+      }
+
+      const fN = canvas.toDataURL('image/png');
+      STATE.frames.push(fN);
+      pushFrameToStrip(fN, i);
+      setProgress(i + 1, total, `frame ${i + 1} ready`);
+      setOverlay({ frame: i + 1, time: elapsedStr() });
+    }
+
+    if (STATE.abort) {
+      setStatus('stopped', 'err');
+      toast('stopped — ' + STATE.frames.length + ' frames kept');
+    } else {
+      setStatus('done', 'done');
+      setProgress(total, total, 'loop complete');
+      toast(STATE.frames.length + ' frames generated', 'success');
+      haptic(20);
+    }
+  } catch (err) {
+    console.error('[aethermorph] generation error:', err);
+    setStatus('error', 'err');
+    // Build the most informative error message we can
+    let msg = '';
+    if (err && err.message) msg = err.message;
+    else if (typeof err === 'string') msg = err;
+    else if (err) msg = String(err);
+    else msg = 'unknown error — check browser console';
+    // Never show empty toast
+    if (!msg.trim()) msg = 'generation failed (empty error) — check console';
+    toast(msg, 'error');
+    // Also log a fuller report to console for debugging
+    console.log('[aethermorph] error context:', {
+      mode: MODE,
+      framesSoFar: STATE.frames.length,
+      aspect: CURRENT_ASPECT,
+      canvasW: CANVAS.w,
+      canvasH: CANVAS.h,
+    });
+  } finally {
+    STATE.running = false;
+    setOverlay({ recording: false, mode: '— idle —' });
+    $('runBtn').disabled = false;
+    $('stopBtn').disabled = true;
+    if (STATE.frames.length >= 1) {
+      $('continueBtn').disabled = false;
+      $('exportZip').disabled = false;
+    }
+    if (STATE.frames.length >= 2) {
+      $('exportMp4').disabled = false;
+      $('exportGif').disabled = false;
+    }
+  }
+}
+
+$('runBtn').addEventListener('click', () => { haptic(); runLoop({ continuing: false }); });
+$('continueBtn').addEventListener('click', () => {
+  if (STATE.running) {
+    toast('already rendering — wait for current run to finish');
+    haptic(8);
+    return;
+  }
+  if (STATE.frames.length === 0) {
+    toast('run first, then extend adds more frames');
+    return;
+  }
+  haptic();
+  runLoop({ continuing: true });
+});
+$('stopBtn').addEventListener('click', () => {
+  if (!STATE.running) {
+    toast('nothing to stop');
+    return;
+  }
+  if (STATE.abort) {
+    toast('already stopping — finishing current frame first');
+    return;
+  }
+  STATE.abort = true;
+  setStatus('stopping…', 'err');
+  toast('stopping after current frame');
+  haptic(15);
+});
+
+$('clearBtn').addEventListener('click', () => {
+  if (STATE.running) {
+    toast('stop the current render first', 'error');
+    return;
+  }
+  if (STATE.frames.length === 0) {
+    toast('nothing to clear');
+    return;
+  }
+  if (!confirm(`Clear all ${STATE.frames.length} frames? This can't be undone.`)) return;
+
+  STATE.frames = [];
+  LAST_FRAME_URL = null;
+  STATE.totalFrames = 0;
+  rebuildFilmstrip();
+
+  // Clear the canvas to default dark background
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+  $('stageEmpty').classList.remove('hidden');
+
+  // Reset overlay & progress
+  setOverlay({ frame: 0, mode: '— idle —', time: '00:00', recording: false });
+  setProgress(0, 0, 'awaiting input');
+  setStatus('ready', 'done');
+
+  // Disable buttons that need frames
+  $('continueBtn').disabled = true;
+  $('exportMp4').disabled = true;
+  $('exportGif').disabled = true;
+  $('exportZip').disabled = true;
+
+  toast('cleared', 'success');
+  haptic(20);
+});
+
+// Playback
+async function startPlayback() {
+  if (STATE.frames.length < 2) {
+    toast('need 2+ frames to play', 'error');
+    return;
+  }
+  if (STATE.running) {
+    toast('still generating', 'error');
+    return;
+  }
+  STATE.playing = true;
+  STATE.playIndex = 0;
+  $('stage').classList.add('playing');
+  $('playBtn').textContent = '■';
+  haptic();
+
+  const imgs = [];
+  for (const d of STATE.frames) imgs.push(await dataURLToImage(d));
+
+  const tick = () => {
+    if (!STATE.playing) return;
+    const fps = parseInt($('playFps').value);
+    drawToCanvas(imgs[STATE.playIndex], playCtx);
+    setOverlay({ frame: STATE.playIndex + 1, mode: `▶ playback ${fps}fps`, time: '' });
+    STATE.playIndex = (STATE.playIndex + 1) % imgs.length;
+    STATE.playTimer = setTimeout(tick, 1000 / fps);
+  };
+  tick();
+}
+function stopPlayback() {
+  STATE.playing = false;
+  if (STATE.playTimer) clearTimeout(STATE.playTimer);
+  STATE.playTimer = null;
+  $('stage').classList.remove('playing');
+  $('playBtn').textContent = '▶';
+  setOverlay({ mode: '— idle —' });
+}
+function restartPlayback() {
+  stopPlayback();
+  startPlayback();
+}
+$('playBtn').addEventListener('click', () => {
+  if (STATE.playing) stopPlayback();
+  else startPlayback();
+});
+
+// Prompt library
+function openPromptLib() {
+  haptic();
+  renderPromptLib();
+  $('promptLibModal').classList.add('show');
+}
+function renderPromptLib() {
+  const body = $('promptLibBody');
+  if (promptsLib.length === 0) {
+    body.innerHTML = `
+      <div class="lib-empty">
+        <div class="ascii">∅</div>
+        <div>no saved prompts<br/>— save one to begin —</div>
+      </div>`;
+    return;
+  }
+  body.innerHTML = '';
+  [...promptsLib].reverse().forEach((p) => {
+    const realIdx = promptsLib.indexOf(p);
+    const item = document.createElement('div');
+    item.className = 'lib-item';
+    item.innerHTML = `
+      <div class="name">${escapeHtml(p.name)}</div>
+      <div class="body">${escapeHtml(p.text)}</div>
+      <div class="row-actions">
+        <button class="chip cyan" data-load="${realIdx}"><span class="glyph">→</span> load</button>
+        <button class="chip" data-del="${realIdx}" style="color:var(--plasma); border-color:rgba(255,77,210,0.3);"><span class="glyph">×</span> delete</button>
+      </div>`;
+    body.appendChild(item);
+  });
+  body.querySelectorAll('[data-load]').forEach(b => b.addEventListener('click', (e) => {
+    const idx = parseInt(e.currentTarget.dataset.load);
+    $('prompt').value = promptsLib[idx].text;
+    $('promptLibModal').classList.remove('show');
+    toast(`loaded "${promptsLib[idx].name}"`, 'success');
+    haptic();
+  }));
+  body.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', (e) => {
+    const idx = parseInt(e.currentTarget.dataset.del);
+    if (!confirm(`Delete "${promptsLib[idx].name}"?`)) return;
+    promptsLib.splice(idx, 1);
+    lsSet(LS_KEYS.prompts, promptsLib);
+    renderPromptLib();
+    toast('deleted');
+    haptic();
+  }));
+}
+$('openPromptLib').addEventListener('click', openPromptLib);
+
+$('savePrompt').addEventListener('click', () => {
+  const txt = $('prompt').value.trim();
+  if (!txt) { toast('prompt is empty', 'error'); return; }
+  $('promptSavePreview').textContent = txt;
+  $('promptSaveName').value = '';
+  $('savePromptModal').classList.add('show');
+  setTimeout(() => $('promptSaveName').focus(), 250);
+  haptic();
+});
+$('confirmSavePrompt').addEventListener('click', () => {
+  const name = $('promptSaveName').value.trim();
+  const text = $('promptSavePreview').textContent;
+  if (!name) { toast('give it a name', 'error'); return; }
+  promptsLib.push({ name, text, ts: Date.now() });
+  lsSet(LS_KEYS.prompts, promptsLib);
+  $('savePromptModal').classList.remove('show');
+  toast(`saved "${name}"`, 'success');
+  haptic();
+});
+
+// Settings preset library
+function currentSettings() {
+  return {
+    zoom: parseFloat($('zoom').value),
+    rotate: parseFloat($('rotate').value),
+    panX: parseFloat($('panX').value),
+    panY: parseFloat($('panY').value),
+    hue: parseFloat($('hue').value),
+    sat: parseFloat($('sat').value),
+    bright: parseFloat($('bright').value),
+    contrast: parseFloat($('contrast').value),
+    strength: parseFloat($('strength').value),
+    iter: parseInt($('iter').value),
+    drift: parseInt($('drift').value),
+    model: $('modelSelect').value,
+    fps: parseInt($('playFps').value),
+    mode: MODE,
+  };
+}
+function applySettings(s) {
+  if (s.zoom != null)     $('zoom').value = s.zoom;
+  if (s.rotate != null)   $('rotate').value = s.rotate;
+  if (s.panX != null)     $('panX').value = s.panX;
+  if (s.panY != null)     $('panY').value = s.panY;
+  if (s.hue != null)      $('hue').value = s.hue;
+  if (s.sat != null)      $('sat').value = s.sat;
+  if (s.bright != null)   $('bright').value = s.bright;
+  if (s.contrast != null) $('contrast').value = s.contrast;
+  if (s.strength != null) $('strength').value = s.strength;
+  if (s.iter != null)     $('iter').value = s.iter;
+  if (s.drift != null)    $('drift').value = s.drift;
+  if (s.model != null)    {
+    $('modelSelect').value = s.model;
+    $('modelVal').textContent = s.model;
+  }
+  if (s.fps != null)      $('playFps').value = s.fps;
+  ['zoom','rotate','panX','panY','hue','sat','bright','contrast','strength','iter','drift'].forEach(id => {
+    if ($(id)) $(id).dispatchEvent(new Event('input'));
+  });
+  $('playFps').dispatchEvent(new Event('input'));
+  // Apply mode if saved
+  if (s.mode && (s.mode === 'warp' || s.mode === 'ai')) {
+    document.querySelectorAll('.mode-toggle button').forEach(b => {
+      if (b.dataset.mode === s.mode) b.click();
+    });
+  }
+}
+function settingsSummary(s) {
+  const moves = [];
+  if (s.zoom !== 1) moves.push(`zoom ${s.zoom.toFixed(3)}`);
+  if (s.rotate !== 0) moves.push(`rot ${s.rotate >= 0 ? '+' : ''}${s.rotate.toFixed(1)}°`);
+  if (s.panX || s.panY) moves.push(`pan ${Math.round(s.panX || 0)},${Math.round(s.panY || 0)}`);
+  if (s.hue) moves.push(`hue ${s.hue >= 0 ? '+' : ''}${s.hue}°`);
+  return `${moves.join(' · ') || 'static'} · blend ${s.strength.toFixed(2)} · ${s.iter}f · ${s.model || 'flux'} · ${s.mode || 'warp'}`;
+}
+
+function openSettingsLib() {
+  haptic();
+  renderSettingsLib();
+  $('settingsLibModal').classList.add('show');
+}
+function renderSettingsLib() {
+  const body = $('settingsLibBody');
+  if (settingsLib.length === 0) {
+    body.innerHTML = `
+      <div class="lib-empty">
+        <div class="ascii">∅</div>
+        <div>no presets saved<br/>— save current values —</div>
+      </div>`;
+    return;
+  }
+  body.innerHTML = '';
+  [...settingsLib].reverse().forEach((p) => {
+    const realIdx = settingsLib.indexOf(p);
+    const item = document.createElement('div');
+    item.className = 'lib-item';
+    item.innerHTML = `
+      <div class="name">${escapeHtml(p.name)}</div>
+      <div class="params">
+        <span class="param-pill">mode<span class="v">${p.s.mode || 'warp'}</span></span>
+        <span class="param-pill">zoom<span class="v">${p.s.zoom.toFixed(3)}</span></span>
+        <span class="param-pill">rot<span class="v">${p.s.rotate >= 0 ? '+' : ''}${p.s.rotate.toFixed(1)}°</span></span>
+        ${(p.s.panX || p.s.panY) ? `<span class="param-pill">pan<span class="v">${Math.round(p.s.panX||0)},${Math.round(p.s.panY||0)}</span></span>` : ''}
+        ${p.s.hue ? `<span class="param-pill">hue<span class="v">${p.s.hue >= 0 ? '+' : ''}${p.s.hue}°</span></span>` : ''}
+        <span class="param-pill">blend<span class="v">${p.s.strength.toFixed(2)}</span></span>
+        <span class="param-pill">frames<span class="v">${p.s.iter}</span></span>
+        <span class="param-pill">model<span class="v">${p.s.model || 'flux'}</span></span>
+      </div>
+      <div class="row-actions">
+        <button class="chip cyan" data-load="${realIdx}"><span class="glyph">→</span> load</button>
+        <button class="chip" data-del="${realIdx}" style="color:var(--plasma); border-color:rgba(255,77,210,0.3);"><span class="glyph">×</span> delete</button>
+      </div>`;
+    body.appendChild(item);
+  });
+  body.querySelectorAll('[data-load]').forEach(b => b.addEventListener('click', (e) => {
+    const idx = parseInt(e.currentTarget.dataset.load);
+    applySettings(settingsLib[idx].s);
+    $('settingsLibModal').classList.remove('show');
+    toast(`loaded "${settingsLib[idx].name}"`, 'success');
+    haptic();
+  }));
+  body.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', (e) => {
+    const idx = parseInt(e.currentTarget.dataset.del);
+    if (!confirm(`Delete "${settingsLib[idx].name}"?`)) return;
+    settingsLib.splice(idx, 1);
+    lsSet(LS_KEYS.settings, settingsLib);
+    renderSettingsLib();
+    toast('deleted');
+    haptic();
+  }));
+}
+$('openSettingsLib').addEventListener('click', openSettingsLib);
+
+$('saveSettings').addEventListener('click', () => {
+  const s = currentSettings();
+  $('settingsSavePreview').textContent = settingsSummary(s);
+  $('settingsSaveName').value = '';
+  $('saveSettingsModal').classList.add('show');
+  setTimeout(() => $('settingsSaveName').focus(), 250);
+  haptic();
+});
+$('confirmSaveSettings').addEventListener('click', () => {
+  const name = $('settingsSaveName').value.trim();
+  if (!name) { toast('give it a name', 'error'); return; }
+  settingsLib.push({ name, s: currentSettings(), ts: Date.now() });
+  lsSet(LS_KEYS.settings, settingsLib);
+  $('saveSettingsModal').classList.remove('show');
+  toast(`saved "${name}"`, 'success');
+  haptic();
+});
+
+// Frame inspector
+function openFrameInspect(idx) {
+  if (idx < 0 || idx >= STATE.frames.length) return;
+  haptic();
+  STATE.inspectIndex = idx;
+  $('inspectImg').src = STATE.frames[idx];
+  $('inspectMeta').textContent = `F · ${String(idx).padStart(3, '0')}  /  total ${STATE.frames.length}`;
+  $('frameInspectModal').classList.add('show');
+}
+$('rewindToFrame').addEventListener('click', async () => {
+  const idx = STATE.inspectIndex;
+  if (idx < 0) return;
+  STATE.frames = STATE.frames.slice(0, idx + 1);
+  rebuildFilmstrip();
+  const img = await dataURLToImage(STATE.frames[STATE.frames.length - 1]);
+  drawToCanvas(img);
+  $('frameInspectModal').classList.remove('show');
+  toast(`rewound to frame ${idx} — extend to continue`, 'success');
+  $('continueBtn').disabled = false;
+  $('exportMp4').disabled = STATE.frames.length < 2;
+  $('exportGif').disabled = STATE.frames.length < 2;
+  haptic(20);
+});
+$('downloadFrame').addEventListener('click', () => {
+  const idx = STATE.inspectIndex;
+  if (idx < 0) return;
+  const a = document.createElement('a');
+  a.href = STATE.frames[idx];
+  a.download = `deforum_frame_${String(idx).padStart(4, '0')}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('frame downloaded', 'success');
+  haptic();
+});
+$('setAsInit').addEventListener('click', () => {
+  const idx = STATE.inspectIndex;
+  if (idx < 0) return;
+  setInitImage(STATE.frames[idx]);
+  $('frameInspectModal').classList.remove('show');
+  toast('set as start image — run loop to use it', 'success');
+  haptic();
+});
+$('deleteFrame').addEventListener('click', () => {
+  const idx = STATE.inspectIndex;
+  if (idx < 0) return;
+  if (!confirm(`Delete frame ${idx}?`)) return;
+  STATE.frames.splice(idx, 1);
+  rebuildFilmstrip();
+  if (STATE.frames.length > 0) {
+    dataURLToImage(STATE.frames[STATE.frames.length - 1]).then(img => drawToCanvas(img));
+  } else {
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+    $('stageEmpty').classList.remove('hidden');
+    $('continueBtn').disabled = true;
+    $('exportMp4').disabled = true;
+    $('exportGif').disabled = true;
+    $('exportZip').disabled = true;
+  }
+  $('exportMp4').disabled = STATE.frames.length < 2;
+  $('exportGif').disabled = STATE.frames.length < 2;
+  $('frameInspectModal').classList.remove('show');
+  toast('deleted', 'success');
+  haptic();
+});
+
+// Init image
+function setInitImage(dataUrl) {
+  STATE.initImageDataUrl = dataUrl;
+  const t = $('initThumb');
+  t.classList.add('has-img');
+  t.innerHTML = `<img src="${dataUrl}" alt="init"/>`;
+  $('initStatus').textContent = 'start image set · img2img mode';
+  $('initStatus').classList.add('active');
+  $('clearInit').style.display = '';
+}
+function clearInitImage() {
+  STATE.initImageDataUrl = null;
+  const t = $('initThumb');
+  t.classList.remove('has-img');
+  t.innerHTML = '<span id="initThumbText">init</span>';
+  $('initStatus').textContent = 'no start image · txt2img mode';
+  $('initStatus').classList.remove('active');
+  $('clearInit').style.display = 'none';
+}
+$('pickInit').addEventListener('click', () => $('initFile').click());
+$('clearInit').addEventListener('click', clearInitImage);
+$('initFile').addEventListener('change', async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) { toast('image files only', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const img = await dataURLToImage(reader.result);
+      const tmp = document.createElement('canvas');
+      tmp.width = CANVAS.w; tmp.height = CANVAS.h;
+      const tctx = tmp.getContext('2d');
+      tctx.fillStyle = '#000';
+      tctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+      const ratio = Math.max(CANVAS.w / img.naturalWidth, CANVAS.h / img.naturalHeight);
+      const w = img.naturalWidth * ratio, h = img.naturalHeight * ratio;
+      tctx.drawImage(img, (CANVAS.w - w)/2, (CANVAS.h - h)/2, w, h);
+      setInitImage(tmp.toDataURL('image/png'));
+      toast('start image loaded', 'success');
+      haptic();
+    } catch (err) {
+      console.error(err);
+      toast('could not read image', 'error');
+    }
+  };
+  reader.readAsDataURL(f);
+  e.target.value = '';
+});
+
+// Modal close
+document.querySelectorAll('[data-close]').forEach(b => {
+  b.addEventListener('click', () => {
+    b.closest('.modal-bg').classList.remove('show');
+  });
+});
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', (e) => {
+    if (e.target === bg) bg.classList.remove('show');
+  });
+});
+
+// Exports
+async function loadAllFrameImages() {
+  const imgs = [];
+  for (const d of STATE.frames) imgs.push(await dataURLToImage(d));
+  return imgs;
+}
+
+$('exportZip').addEventListener('click', async () => {
+  if (!STATE.frames.length) return;
+  haptic();
+  toast('packing zip…');
+  try {
+    const zip = new JSZip();
+    STATE.frames.forEach((d, i) => {
+      const b64 = d.split(',')[1];
+      zip.file(`frame_${String(i).padStart(4, '0')}.png`, b64, { base64: true });
+    });
+    const blob = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(blob, `deforum_frames_${Date.now()}.zip`);
+    toast('zip saved', 'success');
+  } catch (e) {
+    console.error(e);
+    toast('zip export failed', 'error');
+  }
+});
+
+$('exportGif').addEventListener('click', async () => {
+  if (STATE.frames.length < 2) return;
+  haptic();
+  toast('encoding gif…');
+  try {
+    const imgs = await loadAllFrameImages();
+    const fps = parseInt($('playFps').value);
+    const delay = Math.round(1000 / fps);
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 8,
+      width: CANVAS.w,
+      height: CANVAS.h,
+      workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js',
+    });
+    for (const img of imgs) {
+      const tmp = document.createElement('canvas');
+      tmp.width = CANVAS.w; tmp.height = CANVAS.h;
+      tmp.getContext('2d').drawImage(img, 0, 0, CANVAS.w, CANVAS.h);
+      gif.addFrame(tmp, { delay });
+    }
+    gif.on('progress', (p) => setProgress(Math.round(p * 100), 100, 'encoding gif'));
+    gif.on('finished', (blob) => {
+      downloadBlob(blob, `aethermorph_${Date.now()}.gif`);
+      setProgress(STATE.totalFrames, STATE.totalFrames, 'gif saved');
+      toast('gif saved', 'success');
+    });
+    gif.render();
+  } catch (e) {
+    console.error(e);
+    toast('gif export failed', 'error');
+  }
+});
+
+$('exportMp4').addEventListener('click', async () => {
+  if (STATE.frames.length < 2) return;
+  haptic();
+  toast('recording video…');
+  try {
+    const imgs = await loadAllFrameImages();
+    const recCanvas = document.createElement('canvas');
+    recCanvas.width = CANVAS.w; recCanvas.height = CANVAS.h;
+    const recCtx = recCanvas.getContext('2d');
+
+    const fps = parseInt($('playFps').value);
+    const stream = recCanvas.captureStream(fps);
+
+    const candidates = [
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    let mime = '';
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported(c)) { mime = c; break; }
+    }
+    if (!mime) throw new Error('no supported video codec');
+
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((res) => { recorder.onstop = res; });
+    recorder.start();
+
+    const frameMs = 1000 / fps;
+    for (let i = 0; i < imgs.length; i++) {
+      recCtx.fillStyle = '#000';
+      recCtx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+      recCtx.drawImage(imgs[i], 0, 0, CANVAS.w, CANVAS.h);
+      setProgress(i + 1, imgs.length, 'recording video');
+      await new Promise(r => setTimeout(r, frameMs));
+    }
+    await new Promise(r => setTimeout(r, frameMs * 2));
+    recorder.stop();
+    await stopped;
+
+    const blob = new Blob(chunks, { type: mime });
+    const isMp4 = mime.startsWith('video/mp4');
+    downloadBlob(blob, `deforum_${Date.now()}.${isMp4 ? 'mp4' : 'webm'}`);
+    toast(isMp4 ? 'mp4 saved' : 'saved as .webm (mp4 unsupported)', 'success');
+    setProgress(STATE.totalFrames, STATE.totalFrames, 'video saved');
+  } catch (e) {
+    console.error(e);
+    toast('video export failed: ' + (e.message || e), 'error');
+  }
+});
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 100);
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ===== WORKER URL UI =====
+function updateCFBannerUI() {
+  const banner = $('cfBanner');
+  const isConfigured = CF.configured;
+  banner.classList.toggle('connected', isConfigured);
+
+  if (isConfigured) {
+    banner.classList.add('collapsed');
+    $('cfBannerToggle').textContent = '▾';
+    $('cfWorkerUrl').value = CF.workerUrl;
+    $('cfClear').style.display = '';
+    $('cfTitle') && ($('cfTitle').textContent = 'worker connected');
+  } else {
+    banner.classList.remove('collapsed');
+    $('cfBannerToggle').textContent = '▾';
+    $('cfClear').style.display = 'none';
+  }
+}
+
+$('cfBannerToggle').addEventListener('click', () => {
+  $('cfBanner').classList.toggle('collapsed');
+  haptic(8);
+});
+$('cfBanner').querySelector('.cf-banner-head').addEventListener('click', (e) => {
+  if (e.target.id === 'cfBannerToggle') return;
+  $('cfBanner').classList.toggle('collapsed');
+});
+
+function validateWorkerUrl(u) {
+  if (!u) return 'enter your worker url first';
+  let url;
+  try { url = new URL(u); }
+  catch { return 'that doesn\'t look like a valid url'; }
+  if (!/^https?:$/.test(url.protocol)) return 'url must start with https://';
+  return null;
+}
+
+$('cfSave').addEventListener('click', () => {
+  const u = $('cfWorkerUrl').value.trim();
+  const err = validateWorkerUrl(u);
+  if (err) { toast(err, 'error'); return; }
+  saveCFCredentials(u);
+  updateCFBannerUI();
+  toast('worker url saved', 'success');
+  haptic(20);
+});
+
+$('cfClear').addEventListener('click', () => {
+  if (!confirm('Clear saved worker url?')) return;
+  clearCFCredentials();
+  $('cfWorkerUrl').value = '';
+  updateCFBannerUI();
+  toast('worker url cleared');
+  haptic();
+});
+
+$('cfTest').addEventListener('click', async () => {
+  const u = $('cfWorkerUrl').value.trim();
+  const err = validateWorkerUrl(u);
+  if (err) { toast(err, 'error'); return; }
+  saveCFCredentials(u);
+
+  toast('testing worker…');
+  setStatus('testing', 'gen');
+
+  // First, ping the health endpoint
+  try {
+    const pingRes = await fetch(CF.workerUrl + '/ping', { method: 'GET' });
+    if (!pingRes.ok) throw new Error('ping returned ' + pingRes.status);
+    const ping = await pingRes.json();
+    if (!ping.ok) throw new Error('ping response invalid');
+  } catch (e) {
+    toast('worker unreachable: ' + (e.message || e), 'error');
+    setStatus('worker unreachable', 'err');
+    return;
+  }
+
+  // Then attempt a real generation
+  try {
+    await fetchCloudflareImage('a tiny red apple', 1, 'flux-schnell', null, 45000);
+    toast('✓ worker works — generation succeeded', 'success');
+    setStatus('ready', 'done');
+    updateCFBannerUI();
+    haptic(20);
+  } catch (e) {
+    toast('generation failed: ' + (e.message || e), 'error');
+    setStatus('generation failed', 'err');
+  }
+});
+
+// Load on startup
+loadCFCredentials();
+updateCFBannerUI();
+
+setStatus('idle', 'idle');
+setProgress(0, 0, 'awaiting input');
+rebuildFilmstrip();
+if (CF.configured) {
+  setStatus('ready', 'done');
+} else {
+  setStatus('connect worker', 'idle');
+}
+</script>
+</body>
+</html>
